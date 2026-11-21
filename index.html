@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MARKET OVERHEAT MONITOR | 市場過熱與止穩監控戰情室</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono for tabular institutional numbers -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', '"Inter"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            obsidian: '#0b0f19',
+            surface: '#111827',
+            surfaceElevated: '#161f32',
+            borderSubtle: '#1f2937',
+            borderAccent: '#2d3a4f',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Custom scrollbar & institutional terminal styling */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: "Noto Sans TC", "Inter", system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    /* Custom thin scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0f19;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #283449;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b4c6b;
+    }
+    /* Subtle pulsing dot for live mode */
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.25); }
+    }
+    .animate-live-dot {
+      animation: pulse-live 1.6s infinite ease-in-out;
+    }
+    /* Smooth card hover */
+    .terminal-card {
+      background-color: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 0.75rem;
+      transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    }
+    .terminal-card:hover {
+      border-color: #334155;
+      box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.55);
+    }
+    /* Treemap tile hover highlight */
+    .treemap-tile {
+      transition: filter 0.15s ease, transform 0.12s ease;
+    }
+    .treemap-tile:hover {
+      filter: brightness(1.14);
+      z-index: 20;
+      outline: 1.5px solid rgba(255, 255, 255, 0.85);
+    }
+    /* Range slider styling */
+    input[type="range"] {
+      -webkit-appearance: none;
+      background: #1f2937;
+      height: 6px;
+      border-radius: 999px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      border: 2px solid #0b0f19;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#0b0f19] text-slate-100 antialiased selection:bg-sky-500/30 selection:text-sky-200">
+
+  <!-- Toast Notification Container (Replaces alert/confirm) -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Global Tooltip for Heatmaps & Charts -->
+  <div id="globalTooltip" class="fixed z-50 hidden pointer-events-none bg-[#0f172a]/95 backdrop-blur-md border border-slate-700 rounded-lg px-3.5 py-2.5 shadow-2xl text-xs text-slate-100 max-w-xs"></div>
+
+  <!-- STICKY TOP INSTITUTIONAL HEADER -->
+  <header class="sticky top-0 z-40 bg-[#0b0f19]/95 backdrop-blur-md border-b border-[#1f2937] shadow-xl">
+    <!-- Top Bar: Brand, Summary Pill & Data Mode Controller -->
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-6 py-2.5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2.5">
+      <!-- Left: Brand & Report Date -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 via-amber-500 to-emerald-500 p-[1.5px]">
+            <div class="w-full h-full bg-[#0b0f19] rounded-[7px] flex items-center justify-center">
+              <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white">
+                MARKET OVERHEAT MONITOR <span class="text-slate-400 font-normal hidden sm:inline">|</span> <span class="text-sky-400 font-bold">市場過熱與止穩監控戰情室</span>
+              </h1>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800/90 border border-slate-700/80 text-slate-300 font-mono">
+                2026/11/21 週末版基準 | 下一交易日 11/23 (一)
+              </span>
+              <span id="lastSyncTimestamp" class="font-mono text-slate-400">快照時間：2026-11-21 05:00 CST</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Dynamic Overall Signal Summary Pill -->
+      <div id="headerSummaryPill" class="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-lg bg-[#111827] border border-slate-700/90 text-xs shadow-inner">
+        <span class="font-semibold text-slate-300">綜合判讀：</span>
+        <span class="inline-flex items-center gap-1 font-mono font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded">
+          <span class="w-2 h-2 rounded-full bg-rose-500"></span>紅<span id="hdrRedCount">7</span>
+        </span>
+        <span class="inline-flex items-center gap-1 font-mono font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded">
+          <span class="w-2 h-2 rounded-full bg-amber-500"></span>黃<span id="hdrAmberCount">6</span>
+        </span>
+        <span class="inline-flex items-center gap-1 font-mono font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>綠<span id="hdrGreenCount">1</span>
+        </span>
+        <span class="text-slate-500 hidden sm:inline">|</span>
+        <span class="font-semibold text-slate-300">止穩檢核：</span>
+        <span id="hdrStabSummary" class="font-mono text-slate-200">
+          <span class="text-emerald-400 font-bold">0達成</span> / <span class="text-amber-400 font-bold">2部分</span> / <span class="text-rose-400 font-bold">6未達</span>
+        </span>
+      </div>
+
+      <!-- Right: Real-time Data Mode Controller -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <div class="inline-flex rounded-lg bg-[#111827] p-1 border border-[#1f2937]" role="group">
+          <button id="modeBtnSnapshot" onclick="setDataMode('snapshot')" class="px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all bg-sky-600 text-white shadow">
+            11/21 報告基準快照
+          </button>
+          <button id="modeBtnLive" onclick="setDataMode('live')" class="px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-300 hover:text-white flex items-center gap-1.5">
+            <span id="liveDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            即時自動更新 (LIVE)
+          </button>
+          <button id="modeBtnSim" onclick="switchTab('simulator')" class="px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-300 hover:text-white">
+            手動更新 / 11/23 推演
+          </button>
+        </div>
+        <button id="btnManualSync" onclick="triggerImmediateSync()" title="立即同步外部即時報價 (CoinGecko / Frankfurter)" class="p-2 rounded-lg bg-[#111827] hover:bg-slate-800 border border-[#1f2937] text-slate-300 hover:text-sky-400 transition-colors">
+          <svg id="syncIcon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Top Market Ticker Grid: 16 Core Readings -->
+    <div class="bg-[#080b12] border-t border-[#1f2937]/80">
+      <div class="max-w-[1600px] mx-auto px-3 sm:px-6 py-2">
+        <div id="topTickerGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-[#0e1422] border-t border-[#1f2937]">
+      <div class="max-w-[1600px] mx-auto px-3 sm:px-6 flex items-center gap-1 overflow-x-auto no-scrollbar py-1.5">
+        <button data-tab="all" onclick="switchTab('all')" class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40">
+          總覽儀表板 (全部顯示)
+        </button>
+        <button data-tab="indicators" onclick="switchTab('indicators')" class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          1. 14項監控指標與警戒線
+        </button>
+        <button data-tab="heatmaps" onclick="switchTab('heatmaps')" class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          2. 三大市場即時熱力圖矩陣
+        </button>
+        <button data-tab="stabilization" onclick="switchTab('stabilization')" class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          3. 止穩檢核與歷史走勢圖
+        </button>
+        <button data-tab="simulator" onclick="switchTab('simulator')" class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          4. 11/23 情境推演與即時更新
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- MAIN CONTENT WORKSPACE -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-6 py-5 space-y-6">
+
+    <!-- EXECUTIVE BRIEFING BANNER (Shown in 'all' view) -->
+    <section id="executiveBriefSection" class="terminal-card p-4 sm:p-5 bg-gradient-to-r from-[#111827] via-[#131c31] to-[#111827] border-l-4 border-l-rose-500">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1.5 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">全每日指標版 + KOSPI</span>
+            <span class="text-xs text-slate-400 font-mono">原13項：紅6 / 黃6 / 綠1 → 加入KOSPI後：紅7 / 黃6 / 綠1 (燈號結構不變)</span>
+          </div>
+          <h2 class="text-base sm:text-lg font-bold text-white">
+            美股週五接手崩跌、費半單日重挫 10.73%；台股追繳與斷頭戶數雙創新高，恐慌指標接近洗底區
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <strong class="text-rose-400">美股端：</strong>路透報導 SEC 檢視輝達會計處理，NVDA -14.01%、費半 -10.73% 收 8,408.59，S&P -3.70% 連7跌進入修正；黃金 -4.6%、BTC 跌破 6 萬，唯美債上漲使 10Y 殖利率降至 4.92%。
+            <strong class="text-amber-400">台灣端：</strong>台指期夜盤重挫 1,881 點收 33,919；全市場擔保維持率降至 151.78%、追繳 6,462 戶、斷頭 632 戶皆創新高，屬急跌末段常見組合，但尚缺「融資單日減幅收斂至百億內」與「外資近 10 萬口空單明顯回補」兩項確認。
+          </p>
+        </div>
+        <!-- Traffic Light Legend & Live API Status -->
+        <div class="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 bg-[#0b0f19]/80 p-3 rounded-xl border border-slate-800">
+          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">燈號判讀定義</div>
+          <div class="flex flex-wrap lg:flex-col gap-2 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#ef4444]"></span>
+              <span class="text-rose-300 font-semibold">紅燈：危險 / 歷史極端</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"></span>
+              <span class="text-amber-300 font-semibold">黃燈：警戒 / 進行中</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+              <span class="text-emerald-300 font-semibold">綠燈：訊號解除 / 健康</span>
+            </div>
+          </div>
+          <div id="liveApiBadge" class="mt-1 pt-2 border-t border-slate-800 text-[11px] font-mono text-slate-400">
+            資料源：2026/11/21 報告驗證數據
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SECTION 1: 14 INDICATORS & ALERT THRESHOLDS                           -->
+    <!-- ===================================================================== -->
+    <section id="section-indicators" class="space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#111827] p-4 rounded-xl border border-[#1f2937]">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 font-mono text-xs font-bold">MODULE 01</span>
+            <h2 class="text-lg sm:text-xl font-extrabold text-white">14 項監控指標與警戒線儀表板</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">卡片左側為前一讀數 (11/19)，右側為最新讀數 (11/20-21)；警戒條即時顯示當前數值相對於綠/黃/紅燈門檻之位置。</p>
+        </div>
+
+        <!-- Filters: Traffic Light & Category -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="inline-flex rounded-lg bg-[#0b0f19] p-1 border border-slate-800 text-xs">
+            <button onclick="setLightFilter('all')" id="filterLight-all" class="light-filter-btn px-2.5 py-1 rounded font-bold bg-slate-700 text-white">全部 (14)</button>
+            <button onclick="setLightFilter('red')" id="filterLight-red" class="light-filter-btn px-2.5 py-1 rounded font-semibold text-rose-400 hover:bg-rose-500/10">紅燈 (<span id="fltRed">7</span>)</button>
+            <button onclick="setLightFilter('amber')" id="filterLight-amber" class="light-filter-btn px-2.5 py-1 rounded font-semibold text-amber-400 hover:bg-amber-500/10">黃燈 (<span id="fltAmber">6</span>)</button>
+            <button onclick="setLightFilter('green')" id="filterLight-green" class="light-filter-btn px-2.5 py-1 rounded font-semibold text-emerald-400 hover:bg-emerald-500/10">綠燈 (<span id="fltGreen">1</span>)</button>
+          </div>
+          <select id="categoryFilterSelect" onchange="setCategoryFilter(this.value)" class="bg-[#0b0f19] border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-sky-500">
+            <option value="all">全部分類 (I - V)</option>
+            <option value="I">I. 台股槓桿與籌碼 (1-3)</option>
+            <option value="II">II. 市場參與度 (4-5)</option>
+            <option value="III">III. 美股、利率與跨資產 (6-10)</option>
+            <option value="IV">IV. 資金流向與情緒 (11-13)</option>
+            <option value="V">V. 亞洲領先指標 (14)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Container for the 5 Grouped Sections of 14 Cards -->
+      <div id="indicatorsContainer" class="space-y-6"></div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SECTION 2: THREE MARKET HEATMAPS MATRIX                               -->
+    <!-- ===================================================================== -->
+    <section id="section-heatmaps" class="space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#111827] p-4 rounded-xl border border-[#1f2937]">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 font-mono text-xs font-bold">MODULE 02</span>
+            <h2 class="text-lg sm:text-xl font-extrabold text-white">三大市場即時熱力圖矩陣 (S&P 500 / 全球期貨跨資產 / 台股板塊)</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">完整還原三張基準熱力圖板塊結構與漲跌幅數據，支援互動篩選、即時報價跳動與 TradingView 官方即時 Widget 切換。</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Layout Mode Switcher -->
+          <div class="inline-flex rounded-lg bg-[#0b0f19] p-1 border border-slate-800 text-xs">
+            <button onclick="setHeatmapLayout('grid')" id="hmLayout-grid" class="px-2.5 py-1 rounded font-bold bg-sky-600 text-white">三圖同屏總覽</button>
+            <button onclick="setHeatmapLayout('sp500')" id="hmLayout-sp500" class="px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white">放大 S&P 500</button>
+            <button onclick="setHeatmapLayout('futures')" id="hmLayout-futures" class="px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white">放大全球期貨</button>
+            <button onclick="setHeatmapLayout('tw')" id="hmLayout-tw" class="px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white">放大台股板塊</button>
+          </div>
+          <!-- Custom Interactive vs TradingView Embed Switcher -->
+          <div class="inline-flex rounded-lg bg-[#0b0f19] p-1 border border-slate-800 text-xs">
+            <button onclick="setHeatmapEngine('custom')" id="hmEngine-custom" class="px-2.5 py-1 rounded font-bold bg-emerald-600 text-white">互動戰情熱力圖</button>
+            <button onclick="setHeatmapEngine('tv')" id="hmEngine-tv" class="px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white">TradingView 即時組件</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CUSTOM INTERACTIVE HEATMAPS CONTAINER -->
+      <div id="customHeatmapsWrapper" class="space-y-5">
+        <!-- Heatmap A: S&P 500 Index Treemap -->
+        <div id="hmCard-sp500" class="terminal-card p-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-xs font-bold">熱力圖 A</span>
+              <h3 class="text-base font-bold text-white">S&P 500 成分股熱力圖 (Stock Heatmap)</h3>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-xs">Performance 1W, % · Market Cap Weighted</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <select id="spSectorFilter" onchange="renderSP500Heatmap()" class="bg-[#0b0f19] border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1">
+                <option value="ALL">全部產業 (All Sectors)</option>
+                <option value="Electronic technology">Electronic technology (電子科技)</option>
+                <option value="Technology services">Technology services (科技服務)</option>
+                <option value="Retail trade">Retail trade (零售貿易)</option>
+                <option value="Finance">Finance (金融服務)</option>
+                <option value="Health technology">Health technology (醫療健康)</option>
+                <option value="Producer manufacturing">Producer manufacturing (製造工業)</option>
+                <option value="Energy minerals">Energy minerals (能源礦業)</option>
+                <option value="Consumer durables">Consumer durables (耐久消費)</option>
+                <option value="Consumer non-durables">Consumer non-durables (必需消費)</option>
+              </select>
+              <!-- Color Scale Bar matching screenshot -->
+              <div class="flex items-center gap-1 font-mono text-[10px] text-slate-400 bg-[#0b0f19] px-2 py-1 rounded border border-slate-800">
+                <span>-13%</span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#7f1d1d"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#b91c1c"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#ef4444"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#fca5a5"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#64748b"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#34d399"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#059669"></span>
+                <span class="w-4 h-2.5 rounded-sm" style="background:#065f46"></span>
+                <span>+13%</span>
+              </div>
+            </div>
+          </div>
+          <div id="sp500TreemapCanvas" class="w-full min-h-[460px] bg-[#0b0f19] rounded-lg p-2 border border-slate-800/80 grid grid-cols-1 lg:grid-cols-12 gap-2">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Bottom Grid for Heatmap B (Futures/Cross-Asset) & Heatmap C (Taiwan Sector) -->
+        <div id="hmBottomSplitGrid" class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+          <!-- Heatmap B: Global Futures & Cross-Asset -->
+          <div id="hmCard-futures" class="terminal-card p-4 xl:col-span-5 flex flex-col">
+            <div class="flex flex-col gap-2 pb-3 mb-3 border-b border-slate-800">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-xs font-bold">熱力圖 B</span>
+                  <h3 class="text-base font-bold text-white">全球期貨與跨資產熱力圖</h3>
+                </div>
+                <span class="text-[11px] font-mono text-slate-400">週漲跌幅 %</span>
+              </div>
+              <!-- Category Checkboxes matching screenshot -->
+              <div class="flex flex-wrap items-center gap-2 text-xs">
+                <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1e2638] border border-slate-700 cursor-pointer select-none hover:border-amber-500/50">
+                  <input type="checkbox" checked data-fut-cat="Commodities" onchange="renderFuturesHeatmap()" class="accent-amber-500 rounded" />
+                  <span class="font-semibold text-slate-200">Commodities</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1e2638] border border-slate-700 cursor-pointer select-none hover:border-amber-500/50">
+                  <input type="checkbox" checked data-fut-cat="Crypto" onchange="renderFuturesHeatmap()" class="accent-amber-500 rounded" />
+                  <span class="font-semibold text-slate-200">Crypto</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1e2638] border border-slate-700 cursor-pointer select-none hover:border-amber-500/50">
+                  <input type="checkbox" checked data-fut-cat="Currencies" onchange="renderFuturesHeatmap()" class="accent-amber-500 rounded" />
+                  <span class="font-semibold text-slate-200">Currencies</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1e2638] border border-slate-700 cursor-pointer select-none hover:border-amber-500/50">
+                  <input type="checkbox" checked data-fut-cat="Indices" onchange="renderFuturesHeatmap()" class="accent-amber-500 rounded" />
+                  <span class="font-semibold text-slate-200">Indices / Bonds</span>
+                </label>
+              </div>
+            </div>
+            <div id="futuresHeatmapGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-4 gap-1.5 flex-1">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Heatmap C: Taiwan Stock Sector Heatmap -->
+          <div id="hmCard-tw" class="terminal-card p-4 xl:col-span-7 flex flex-col">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-xs font-bold">熱力圖 C</span>
+                <h3 class="text-base font-bold text-white">台股板塊熱力圖 (Taiwan Stock Sector Treemap)</h3>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                <!-- Grouping Toggle -->
+                <div class="inline-flex rounded-lg bg-[#0b0f19] p-0.5 border border-slate-700">
+                  <button onclick="setTwGroupMode('sector')" id="twGrp-sector" class="px-2 py-1 rounded font-bold bg-slate-700 text-white">按產業分組</button>
+                  <button onclick="setTwGroupMode('flat')" id="twGrp-flat" class="px-2 py-1 rounded font-medium text-slate-400 hover:text-white">不分組</button>
+                </div>
+                <!-- Timeframe Toggle matching screenshot -->
+                <div class="inline-flex rounded-lg bg-[#0b0f19] p-0.5 border border-slate-700 font-mono">
+                  <button onclick="setTwTimeframe('1D')" id="twTf-1D" class="tw-tf-btn px-2 py-1 rounded text-slate-400 hover:text-white">1日</button>
+                  <button onclick="setTwTimeframe('1W')" id="twTf-1W" class="tw-tf-btn px-2 py-1 rounded text-slate-400 hover:text-white">1週</button>
+                  <button onclick="setTwTimeframe('1M')" id="twTf-1M" class="tw-tf-btn px-2 py-1 rounded bg-sky-600 text-white font-bold">1月</button>
+                  <button onclick="setTwTimeframe('3M')" id="twTf-3M" class="tw-tf-btn px-2 py-1 rounded text-slate-400 hover:text-white">3月</button>
+                  <button onclick="setTwTimeframe('YTD')" id="twTf-YTD" class="tw-tf-btn px-2 py-1 rounded text-slate-400 hover:text-white">YTD</button>
+                </div>
+              </div>
+            </div>
+            <div id="twTreemapCanvas" class="w-full min-h-[430px] bg-[#0b0f19] rounded-lg p-2 border border-slate-800/80 flex-1">
+              <!-- Rendered by JS -->
+            </div>
+            <!-- Color Legend matching Taiwan screenshot -->
+            <div class="mt-2.5 pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-slate-300">
+              <span class="text-slate-400">台股色階 (紅跌綠漲國際標準色階)：</span>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#2e8b68"></i>≥+50%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#68b094"></i>+30~+50%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#a3d1be"></i>+10~+30%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#cbd5e1"></i>0~+10%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#f5c2c2"></i>-10~0%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#f29b9b"></i>-30~-10%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#e65c5c"></i>-50~-30%</span>
+                <span class="inline-flex items-center gap-1"><i class="w-3 h-2.5 inline-block rounded-xs" style="background:#d92626"></i>≤-50%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRADINGVIEW OFFICIAL WIDGETS WRAPPER (Hidden by default, toggled on click) -->
+      <div id="tvWidgetsWrapper" class="hidden space-y-5">
+        <div class="terminal-card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-base font-bold text-white">TradingView 即時 S&P 500 & 全球市場熱力圖</h3>
+            <span class="text-xs text-slate-400">外部即時數據源 (若網路受限請切回「互動戰情熱力圖」)</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="h-[460px] rounded-lg overflow-hidden border border-slate-800 bg-[#0b0f19]" id="tvWidgetSP500"></div>
+            <div class="h-[460px] rounded-lg overflow-hidden border border-slate-800 bg-[#0b0f19]" id="tvWidgetCrypto"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SECTION 3: 8-SIGNAL STABILIZATION CHECKLIST & HISTORICAL CHARTS       -->
+    <!-- ===================================================================== -->
+    <section id="section-stabilization" class="space-y-5">
+      <div class="bg-[#111827] p-4 rounded-xl border border-[#1f2937] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold">MODULE 03</span>
+            <h2 class="text-lg sm:text-xl font-extrabold text-white">每日止穩檢核清單 (8 SIGNALS) 與關鍵歷史走勢圖</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">止穩順序框架：一、融資單日減幅縮到百億內 + 維持率止跌；二、外資空單回補 + 現貨轉買；三、VIX 回落 + F&G &lt;20。</p>
+        </div>
+        <div id="stabChecklistBadge" class="px-3.5 py-2 rounded-xl bg-[#0b0f19] border border-slate-700 font-mono text-xs font-bold text-slate-200">
+          止穩檢核結果：0 項達成 ｜ 2 項部分 ｜ 6 項未達
+        </div>
+      </div>
+
+      <!-- 8-Signal Checklist Table + Risk/Opportunity Split -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <div class="terminal-card p-4 xl:col-span-8 overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-[640px]">
+            <thead>
+              <tr class="border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400">
+                <th class="py-2.5 px-3">止穩訊號</th>
+                <th class="py-2.5 px-3">止穩條件門檻</th>
+                <th class="py-2.5 px-3">當前狀態</th>
+                <th class="py-2.5 px-3">讀數變化 (前一讀數 → 最新)</th>
+              </tr>
+            </thead>
+            <tbody id="stabilizationTableBody" class="divide-y divide-slate-800/70 text-xs sm:text-sm">
+              <!-- Populated dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Risk vs Bottoming Signals Analysis Box -->
+        <div class="terminal-card p-4 xl:col-span-4 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30">
+              <div class="text-xs font-bold text-rose-400 flex items-center gap-1.5 mb-1">
+                <span>⚠️ 反向風險 (11/23 週一開盤壓力)</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                週一夜盤跳空約 <span class="font-mono text-rose-300 font-bold">-5.25% (33,919)</span>，加上 11/19–11/20 共約 <span class="font-mono text-white font-bold">9,400 戶</span>追繳在本週初到期，若未補足可能出現集中處分與連續跌停，全市場維持率恐下探 <span class="font-mono text-rose-300 font-bold">145%</span>；若輝達 SEC 會計調查擴大，AI 供應鏈估值將再下修。
+              </p>
+            </div>
+            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+              <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5 mb-1">
+                <span>🎯 洗底末段特徵與轉折觀察</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                美國 VIX 突破 30 (收 <span class="font-mono text-emerald-300 font-bold">35.89</span>)、台灣追繳與斷頭戶數創新高、外資現貨賣超縮減至百億內 (<span class="font-mono text-emerald-300 font-bold">-94.1億</span>)，皆為急跌末段特徵。一旦融資減幅收斂、外資近 10 萬口空單開始回補，反彈力道將相當猛烈。
+              </p>
+            </div>
+          </div>
+          <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+            <span>國安基金第10次護盤額度：約 5,000 億</span>
+            <span>限空令：借券賣出上限 3%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TWO HISTORICAL CHARTS WITH HORIZONTAL THRESHOLD LINES -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- Chart 1: Taiwan Margin Balance (2025/3 - 2026/11/20) -->
+        <div class="terminal-card p-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold text-white">上市融資餘額走勢 (2025/3 對等關稅至 2026/11/20)</h3>
+              <p class="text-[11px] text-slate-400">本輪自 10/12 高點 6,533 億累減 33.4% 至 4,352 億，與 2025/4 關稅股災 -36% 相當</p>
+            </div>
+            <span class="px-2 py-1 rounded bg-rose-500/15 border border-rose-500/30 text-rose-300 font-mono text-xs font-bold self-start">
+              極端警戒線：&gt; 5,500 億
+            </span>
+          </div>
+          <div class="relative w-full h-[290px] bg-[#0b0f19] rounded-lg border border-slate-800 p-2">
+            <canvas id="marginChartCanvas" class="w-full h-full"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: South Korea KOSPI (2026/9/22 - 11/20) -->
+        <div class="terminal-card p-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold text-white">南韓 KOSPI 指數與關鍵防線 (2026/9/22 – 11/20)</h3>
+              <p class="text-[11px] text-slate-400">11/20 重挫 -5.21% 收 4,869.96，再度跌破 5,000 整數防線並創本輪收盤新低</p>
+            </div>
+            <span class="px-2 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold self-start">
+              關鍵防線：5,000 ｜ 止穩：5,820
+            </span>
+          </div>
+          <div class="relative w-full h-[290px] bg-[#0b0f19] rounded-lg border border-slate-800 p-2">
+            <canvas id="kospiChartCanvas" class="w-full h-full"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- CATALYST TIMELINE (2026/10/13 - 11/23) -->
+      <div class="terminal-card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm sm:text-base font-bold text-white">案例印證與關鍵事件時間軸 (2026/10/13 – 11/23 觀察重點)</h3>
+          </div>
+          <button onclick="toggleTimelineExpand()" id="btnToggleTimeline" class="text-xs text-sky-400 hover:text-sky-300 font-semibold">
+            展開完整 12 筆事件紀錄 ▼
+          </button>
+        </div>
+        <div id="timelineGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SECTION 4: LIVE DATA EDITOR & 11/23 SCENARIO SIMULATOR                -->
+    <!-- ===================================================================== -->
+    <section id="section-simulator" class="space-y-4">
+      <div class="terminal-card p-4 sm:p-5 border-t-4 border-t-sky-500">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-800">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 font-mono text-xs font-bold">MODULE 04</span>
+              <h2 class="text-lg sm:text-xl font-extrabold text-white">即時盤後更新與 11/23 情境推演模擬器</h2>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">調整任一指標數值，系統將即時重新計算「14項監控燈號」、「警戒線位置」與「8項止穩檢核表」結果，並可儲存至瀏覽器。</p>
+          </div>
+
+          <!-- Preset Scenarios & Persistence Actions -->
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <button onclick="applyScenario('baseline')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-600">
+              還原 11/21 基準 (紅7/黃6/綠1)
+            </button>
+            <button onclick="applyScenario('monday_gap')" class="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold border border-rose-500/40">
+              推演 A：週一反映夜盤補跌
+            </button>
+            <button onclick="applyScenario('stabilizing')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/40">
+              推演 B：斷頭收斂 + 止穩開端
+            </button>
+            <button onclick="applyScenario('washout_done')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-semibold border border-emerald-500/40">
+              推演 C：洗底完成 (VIX&gt;30+F&G&lt;20)
+            </button>
+          </div>
+        </div>
+
+        <!-- Interactive Input Sliders Grid -->
+        <div id="simulatorControlsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+          <!-- Populated dynamically by JS -->
+        </div>
+
+        <!-- Bottom Save / Export Bar -->
+        <div class="mt-5 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div class="text-xs text-slate-400">
+            提示：盤後取得最新證交所 / 期交所 / 美股收盤數據後，可直接輸入並點擊儲存，下次開啟自動載入。
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <button onclick="saveToLocalStorage()" class="px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold shadow">
+              儲存目前數據至本機
+            </button>
+            <button onclick="exportSnapshotJSON()" class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-slate-700">
+              複製 JSON 戰情快照
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-[#080b12] border-t border-[#1f2937] py-4 px-3 sm:px-6 text-xs text-slate-500">
+    <div class="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>MARKET OVERHEAT MONITOR 全每日指標版 + KOSPI ｜ 資料基準：2026/11/21 週末版儀表板與三大市場熱力圖</div>
+      <div>本戰情室僅供研究追蹤與風險監控參考，不構成任何投資建議。</div>
+    </div>
+  </footer>
+
+  <!-- ======================================================================= -->
+  <!-- JAVASCRIPT APPLICATION LOGIC                                            -->
+  <!-- ======================================================================= -->
+  <script>
+    // -------------------------------------------------------------------------
+    // 1. BASELINE STATE (EXACT VERIFIED DATA FROM 2026/11/21 PDF REPORT)
+    // -------------------------------------------------------------------------
+    const BASELINE_STATE = {
+      taiex: 36033.29,
+      taiexChgPct: -6.23,
+      taiexWeekPct: -17.49,
+      twNightFutures: 33919,
+      twNightChg: -1881,
+      twNightChgPct: -5.25,
+      marginBalance: 4352.3,       // 億元 (前值 4843.7)
+      marginPrev: 4843.7,
+      marginDailyChg: -491.4,      // 億元 (單日 -491.41億)
+      marginCumDropPct: 33.4,      // 自 10/12 高點 6533 累減 %
+      maintenanceRatio: 151.78,    // % (前值 156.18%)
+      maintenancePrev: 156.18,
+      marginCallHouseholds: 6462,  // 戶
+      forcedLiquidationHouseholds: 632, // 戶
+      foreignFuturesShort: 97863,  // 口 (前值 99,219)
+      foreignFuturesPrev: 99219,
+      dailyVolume: 8774,           // 億元 (前值 8,953)
+      dailyVolumePrev: 8953,
+      retailHeatState: 'amber',    // 'red': 跌市搶買創紀錄, 'amber': 內資踩踏出場, 'green': 熱度退潮洗清
+      sox: 8408.59,                // 前值 9419.72
+      soxPrev: 9419.72,
+      soxChgPct: -10.73,
+      soxDrawdownPct: -42.0,       // 距高點 14570 回檔約 -42%
+      sp500: 6910.39,              // 前值 7175.83
+      sp500Prev: 7175.83,
+      sp500ChgPct: -3.70,
+      sp500DrawdownPct: -11.6,     // 距10月紀錄 7819 約 -11.6%
+      us10y: 4.92,                 // % (前值 5.05%)
+      us10yPrev: 5.05,
+      dxy: 103.84,                 // 前值 103.87
+      dxyPrev: 103.87,
+      gold: 3515,                  // USD (前值 3625)
+      goldPrev: 3625,
+      goldChgPct: -4.63,
+      btc: 59000,                  // USD (約5.90萬)
+      btcChgPct: -4.72,
+      crossAssetState: 'red',      // 'red': 金股齊跌流動性賣壓, 'amber': BTC腰斬區, 'green': 避險資產回升
+      foreignSpotFlow: -94.1,      // 億元 (前值 -243.1)
+      foreignSpotPrev: -243.1,
+      usdTwd: 32.936,              // 前值 32.942
+      usdTwdPrev: 32.942,
+      vix: 35.89,                  // 前值 28.44
+      vixPrev: 28.44,
+      vixChgPct: 26.2,
+      fng: 22,                     // 11/20 未確認低於20 (設22代表未確認<20; 調至<20即轉綠燈洗底)
+      kospi: 4869.96,              // 前值 5137.89
+      kospiPrev: 5137.89,
+      kospiChgPct: -5.21,
+      nvda: 125.53,
+      nvdaChgPct: -14.01,
+      tsmAdr: 319.14,
+      tsmAdrChgPct: -9.36
+    };
+
+    let state = { ...BASELINE_STATE };
+    let dataMode = 'snapshot'; // 'snapshot' | 'live'
+    let liveIntervalId = null;
+    let activeTab = 'all';
+    let lightFilter = 'all';
+    let categoryFilter = 'all';
+    let heatmapLayout = 'grid';
+    let heatmapEngine = 'custom';
+    let twGroupMode = 'sector';
+    let twTimeframe = '1M';
+    let timelineExpanded = false;
+
+    // -------------------------------------------------------------------------
+    // 2. HEATMAP DATASETS (MATCHING ALL THREE SCREENSHOTS)
+    // -------------------------------------------------------------------------
+    const SP500_DATA = [
+      // Electronic technology
+      { ticker: 'AAPL', name: 'Apple Inc.', sector: 'Electronic technology', cap: 3400, chg1w: -4.30, chg1d: -1.85 },
+      { ticker: 'NVDA', name: 'NVIDIA Corp.', sector: 'Electronic technology', cap: 3050, chg1w: -26.12, chg1d: -14.01 },
+      { ticker: 'AVGO', name: 'Broadcom Inc.', sector: 'Electronic technology', cap: 820, chg1w: -14.62, chg1d: -8.40 },
+      { ticker: 'AMD', name: 'Advanced Micro Devices', sector: 'Electronic technology', cap: 240, chg1w: -25.12, chg1d: -13.25 },
+      { ticker: 'MU', name: 'Micron Technology', sector: 'Electronic technology', cap: 135, chg1w: -24.04, chg1d: -13.90 },
+      { ticker: 'CSCO', name: 'Cisco Systems', sector: 'Electronic technology', cap: 220, chg1w: -9.78, chg1d: -3.12 },
+      { ticker: 'GE', name: 'GE Aerospace', sector: 'Electronic technology', cap: 195, chg1w: -6.82, chg1d: -2.45 },
+      { ticker: 'INTC', name: 'Intel Corp.', sector: 'Electronic technology', cap: 110, chg1w: -15.46, chg1d: -6.80 },
+      { ticker: 'QCOM', name: 'Qualcomm Inc.', sector: 'Electronic technology', cap: 185, chg1w: -18.14, chg1d: -7.90 },
+      // Technology services
+      { ticker: 'MSFT', name: 'Microsoft Corp.', sector: 'Technology services', cap: 3150, chg1w: -6.78, chg1d: -2.95 },
+      { ticker: 'GOOGL', name: 'Alphabet Inc.', sector: 'Technology services', cap: 2150, chg1w: -12.44, chg1d: -4.60 },
+      { ticker: 'META', name: 'Meta Platforms', sector: 'Technology services', cap: 1420, chg1w: -10.58, chg1d: -4.15 },
+      { ticker: 'PLTR', name: 'Palantir Technologies', sector: 'Technology services', cap: 165, chg1w: -16.45, chg1d: -8.20 },
+      { ticker: 'ORCL', name: 'Oracle Corp.', sector: 'Technology services', cap: 430, chg1w: -20.64, chg1d: -7.50 },
+      { ticker: 'PANW', name: 'Palo Alto Networks', sector: 'Technology services', cap: 130, chg1w: 3.88, chg1d: 1.45 },
+      { ticker: 'CRM', name: 'Salesforce Inc.', sector: 'Technology services', cap: 290, chg1w: -17.87, chg1d: -5.20 },
+      { ticker: 'NFLX', name: 'Netflix Inc.', sector: 'Technology services', cap: 340, chg1w: -9.78, chg1d: -3.40 },
+      // Retail trade
+      { ticker: 'AMZN', name: 'Amazon.com Inc.', sector: 'Retail trade', cap: 2050, chg1w: -8.43, chg1d: -3.85 },
+      { ticker: 'WMT', name: 'Walmart Inc.', sector: 'Retail trade', cap: 680, chg1w: 0.93, chg1d: 1.12 },
+      { ticker: 'COST', name: 'Costco Wholesale', sector: 'Retail trade', cap: 410, chg1w: 0.69, chg1d: 0.84 },
+      { ticker: 'HD', name: 'Home Depot', sector: 'Retail trade', cap: 390, chg1w: -1.43, chg1d: -0.65 },
+      { ticker: 'TJX', name: 'TJX Companies', sector: 'Retail trade', cap: 135, chg1w: 4.16, chg1d: 1.35 },
+      // Finance
+      { ticker: 'BRK.B', name: 'Berkshire Hathaway', sector: 'Finance', cap: 980, chg1w: -3.80, chg1d: -1.60 },
+      { ticker: 'V', name: 'Visa Inc.', sector: 'Finance', cap: 560, chg1w: -5.01, chg1d: -2.10 },
+      { ticker: 'MA', name: 'Mastercard Inc.', sector: 'Finance', cap: 450, chg1w: -4.54, chg1d: -1.95 },
+      { ticker: 'JPM', name: 'JPMorgan Chase', sector: 'Finance', cap: 640, chg1w: -10.31, chg1d: -4.25 },
+      { ticker: 'MS', name: 'Morgan Stanley', sector: 'Finance', cap: 210, chg1w: -13.71, chg1d: -5.40 },
+      { ticker: 'GS', name: 'Goldman Sachs', sector: 'Finance', cap: 185, chg1w: -14.31, chg1d: -5.65 },
+      { ticker: 'BAC', name: 'Bank of America', sector: 'Finance', cap: 320, chg1w: -11.68, chg1d: -4.50 },
+      // Health technology
+      { ticker: 'LLY', name: 'Eli Lilly & Co.', sector: 'Health technology', cap: 760, chg1w: -5.79, chg1d: -2.30 },
+      { ticker: 'JNJ', name: 'Johnson & Johnson', sector: 'Health technology', cap: 385, chg1w: -5.10, chg1d: -1.40 },
+      { ticker: 'ABBV', name: 'AbbVie Inc.', sector: 'Health technology', cap: 320, chg1w: -3.50, chg1d: -1.15 },
+      { ticker: 'UNH', name: 'UnitedHealth Group', sector: 'Health technology', cap: 510, chg1w: -9.23, chg1d: -3.20 },
+      // Producer manufacturing
+      { ticker: 'CAT', name: 'Caterpillar Inc.', sector: 'Producer manufacturing', cap: 190, chg1w: -16.58, chg1d: -5.80 },
+      { ticker: 'LMT', name: 'Lockheed Martin', sector: 'Producer manufacturing', cap: 135, chg1w: -18.52, chg1d: -4.90 },
+      { ticker: 'BA', name: 'Boeing Co.', sector: 'Producer manufacturing', cap: 115, chg1w: -20.32, chg1d: -6.40 },
+      { ticker: 'HON', name: 'Honeywell Intl.', sector: 'Producer manufacturing', cap: 140, chg1w: -15.91, chg1d: -4.75 },
+      // Energy minerals
+      { ticker: 'XOM', name: 'Exxon Mobil', sector: 'Energy minerals', cap: 510, chg1w: -6.67, chg1d: -1.80 },
+      { ticker: 'CVX', name: 'Chevron Corp.', sector: 'Energy minerals', cap: 280, chg1w: -4.54, chg1d: -1.25 },
+      // Consumer durables & non-durables
+      { ticker: 'TSLA', name: 'Tesla Inc.', sector: 'Consumer durables', cap: 820, chg1w: -13.91, chg1d: -6.15 },
+      { ticker: 'KO', name: 'Coca-Cola Co.', sector: 'Consumer non-durables', cap: 270, chg1w: -1.21, chg1d: 0.45 },
+      { ticker: 'PG', name: 'Procter & Gamble', sector: 'Consumer non-durables', cap: 390, chg1w: 0.24, chg1d: 0.78 },
+      { ticker: 'PEP', name: 'PepsiCo Inc.', sector: 'Consumer non-durables', cap: 225, chg1w: -7.65, chg1d: -1.90 }
+    ];
+
+    const FUTURES_DATA = [
+      { id: 'SPX500', label: 'SPX500', name: 'S&P 500 期貨', cat: 'Indices', chg: -8.98, price: '6,910.4' },
+      { id: 'DOW', label: 'DOW', name: '道瓊工業期貨', cat: 'Indices', chg: -7.93, price: '48,147' },
+      { id: 'NASDAQ', label: 'NASDAQ', name: '那斯達克100期貨', cat: 'Indices', chg: -10.37, price: '22,618' },
+      { id: 'RUSSELL', label: 'RUSSELL', name: '羅素2000期貨', cat: 'Indices', chg: -7.84, price: '2,145.2' },
+      { id: 'NIKKEI', label: 'NIKKEI', name: '日經225期貨', cat: 'Indices', chg: -7.70, price: '36,420' },
+      { id: 'CHINA50', label: 'CHINA50', name: '富時中國A50', cat: 'Indices', chg: -7.50, price: '12,380' },
+      { id: 'DAX', label: 'DAX', name: '德國DAX指數', cat: 'Indices', chg: -7.28, price: '18,210' },
+      { id: 'UK100', label: 'UK100', name: '英國富時100', cat: 'Indices', chg: -5.10, price: '7,940' },
+      { id: 'US10T', label: 'US10T', name: '美國10年期公債期貨', cat: 'Indices', chg: -3.74, price: '108.45' },
+      { id: 'USOIL', label: 'USOIL', name: 'WTI 西德州原油', cat: 'Commodities', chg: -5.82, price: '89.40' },
+      { id: 'GOLD', label: 'GOLD', name: '紐約黃金期貨', cat: 'Commodities', chg: -9.02, price: '3,515.0' },
+      { id: 'SILVER', label: 'SILVER', name: '紐約白銀期貨', cat: 'Commodities', chg: -16.24, price: '41.00' },
+      { id: 'COPPER', label: 'COPPER', name: '高品位銅期貨', cat: 'Commodities', chg: -9.78, price: '4.12' },
+      { id: 'PLATINUM', label: 'PLATINUM', name: '白金期貨', cat: 'Commodities', chg: -13.36, price: '918.5' },
+      { id: 'NATGAS', label: 'NATGAS', name: '天然氣期貨', cat: 'Commodities', chg: null, price: 'N/A' },
+      { id: 'EURO', label: 'EURO', name: '歐元期貨 EUR/USD', cat: 'Currencies', chg: -0.68, price: '1.0542' },
+      { id: 'AU-DOLLAR', label: 'AU-DOLLAR', name: '澳幣期貨 AUD/USD', cat: 'Currencies', chg: -2.76, price: '0.6418' },
+      { id: 'CA-DOLLAR', label: 'CA-DOLLAR', name: '加幣期貨 CAD/USD', cat: 'Currencies', chg: -0.55, price: '0.7124' },
+      { id: 'CH-FRANC', label: 'CH-FRANC', name: '瑞郎期貨 CHF/USD', cat: 'Currencies', chg: -0.43, price: '1.1285' },
+      { id: 'GB-POUND', label: 'GB-POUND', name: '英鎊期貨 GBP/USD', cat: 'Currencies', chg: -1.13, price: '1.2615' },
+      { id: 'JP-YEN', label: 'JP-YEN', name: '日圓期貨 JPY/USD', cat: 'Currencies', chg: 0.85, price: '0.00631' },
+      { id: 'NZ-DOLLAR', label: 'NZ-DOLLAR', name: '紐幣期貨 NZD/USD', cat: 'Currencies', chg: -1.34, price: '0.5842' },
+      { id: 'US-DOLLAR', label: 'US-DOLLAR', name: '美元指數 DXY', cat: 'Currencies', chg: 0.42, price: '103.84' },
+      { id: 'BITCOIN', label: 'BITCOIN', name: '比特幣 BTC/USD', cat: 'Crypto', chg: -24.39, price: '59,000' },
+      { id: 'ETHEREUM', label: 'ETHEREUM', name: '以太幣 ETH/USD', cat: 'Crypto', chg: -20.73, price: '2,185' }
+    ];
+
+    const TW_STOCKS_DATA = [
+      // 電子科技
+      { code: '2330', name: '台積電', sector: '電子科技', weight: 36, perf: { '1D': -4.76, '1W': -16.49, '1M': -17.53, '3M': -12.40, 'YTD': 18.20 } },
+      { code: '2454', name: '聯發科', sector: '電子科技', weight: 9.5, perf: { '1D': -9.85, '1W': -19.80, '1M': -20.52, '3M': -15.10, 'YTD': 8.40 } },
+      { code: '2317', name: '鴻海', sector: '電子科技', weight: 8.5, perf: { '1D': -6.40, '1W': -15.20, '1M': -14.11, '3M': -9.80, 'YTD': 22.50 } },
+      { code: '2308', name: '台達電', sector: '電子科技', weight: 5.5, perf: { '1D': -9.90, '1W': -24.50, '1M': -44.62, '3M': -38.10, 'YTD': -14.20 } },
+      { code: '3711', name: '日月光投控', sector: '電子科技', weight: 4.5, perf: { '1D': -7.20, '1W': -18.90, '1M': -33.19, '3M': -26.40, 'YTD': -5.60 } },
+      { code: '2303', name: '聯電', sector: '電子科技', weight: 3.8, perf: { '1D': -3.10, '1W': -11.40, '1M': -17.80, '3M': -14.20, 'YTD': -8.90 } },
+      { code: '2382', name: '廣達', sector: '電子科技', weight: 4.2, perf: { '1D': -8.15, '1W': -19.20, '1M': -22.70, '3M': -18.50, 'YTD': 12.30 } },
+      { code: '2408', name: '南亞科', sector: '電子科技', weight: 2.6, perf: { '1D': -9.50, '1W': -21.40, '1M': -30.52, '3M': -28.90, 'YTD': -24.10 } },
+      { code: '3037', name: '欣興', sector: '電子科技', weight: 2.4, perf: { '1D': -9.80, '1W': -26.80, '1M': -54.27, '3M': -48.50, 'YTD': -31.20 } },
+      { code: '3017', name: '奇鋐', sector: '電子科技', weight: 2.5, perf: { '1D': -9.60, '1W': -23.10, '1M': -35.15, '3M': -29.40, 'YTD': 6.80 } },
+      { code: '3443', name: '創意', sector: '電子科技', weight: 2.1, perf: { '1D': -7.80, '1W': -18.40, '1M': -27.64, '3M': -21.20, 'YTD': -9.40 } },
+      { code: '2345', name: '智邦', sector: '電子科技', weight: 2.2, perf: { '1D': -8.40, '1W': -20.10, '1M': -29.96, '3M': -22.80, 'YTD': 4.10 } },
+      { code: '2327', name: '國巨', sector: '電子科技', weight: 2.0, perf: { '1D': -6.90, '1W': -16.80, '1M': -26.45, '3M': -20.10, 'YTD': -7.50 } },
+      { code: '2357', name: '華碩', sector: '電子科技', weight: 2.1, perf: { '1D': -6.50, '1W': -15.40, '1M': -23.71, '3M': -17.60, 'YTD': 9.20 } },
+      // 金融
+      { code: '2881', name: '富邦金', sector: '金融', weight: 5.2, perf: { '1D': -3.40, '1W': -8.90, '1M': -11.94, '3M': -6.50, 'YTD': 14.80 } },
+      { code: '2882', name: '國泰金', sector: '金融', weight: 4.8, perf: { '1D': -3.65, '1W': -9.40, '1M': -12.73, '3M': -7.20, 'YTD': 12.60 } },
+      { code: '2891', name: '中信金', sector: '金融', weight: 3.6, perf: { '1D': -2.10, '1W': -5.20, '1M': -6.55, '3M': -2.80, 'YTD': 16.40 } },
+      { code: '2887', name: '台新金', sector: '金融', weight: 2.4, perf: { '1D': -4.80, '1W': -11.20, '1M': -18.80, '3M': -13.40, 'YTD': -2.10 } },
+      { code: '2885', name: '元大金', sector: '金融', weight: 2.6, perf: { '1D': -5.10, '1W': -12.40, '1M': -16.46, '3M': -10.90, 'YTD': 7.50 } },
+      // 生產製造與加工業
+      { code: '1303', name: '南亞', sector: '加工業', weight: 3.4, perf: { '1D': -4.20, '1W': -11.80, '1M': -18.17, '3M': -15.60, 'YTD': -19.80 } },
+      { code: '1519', name: '華城', sector: '生產製造', weight: 3.1, perf: { '1D': -8.90, '1W': -21.50, '1M': -28.40, '3M': -24.10, 'YTD': 15.20 } },
+      { code: '2002', name: '中鋼', sector: '生產製造', weight: 2.5, perf: { '1D': -2.80, '1W': -7.40, '1M': -11.20, '3M': -9.50, 'YTD': -12.40 } },
+      // 通訊與防禦
+      { code: '2412', name: '中華電', sector: '通訊', weight: 4.5, perf: { '1D': 0.85, '1W': 2.15, '1M': 5.56, '3M': 7.80, 'YTD': 11.40 } },
+      { code: '3045', name: '台灣大', sector: '通訊', weight: 2.4, perf: { '1D': 0.40, '1W': 1.10, '1M': 2.85, '3M': 4.20, 'YTD': 8.90 } },
+      { code: '2603', name: '長榮', sector: '運輸', weight: 2.8, perf: { '1D': -4.50, '1W': -10.20, '1M': -13.60, '3M': -8.40, 'YTD': 19.50 } }
+    ];
+
+    const CATALYST_EVENTS = [
+      { date: '2026/10/13 - 10/15', tag: '引爆點', color: 'rose', title: 'CPI 偏熱 + AI 融資疑慮引爆', desc: '台股 10/15 重挫 1,656 點，外資賣超 3,026 億、期貨淨空單 97,582 口雙創紀錄；KOSPI 三天暴跌 16%。' },
+      { date: '2026/11/05 - 11/06', tag: '史上最大盤中跌點', color: 'rose', title: '台股盤中崩跌 3,737 點失守 4 萬', desc: '盤中最低 37,837.05，收 39,701.64；上市融資單日 -423.56 億破紀錄；KOSPI -6.02% 觸發熔斷。' },
+      { date: '2026/11/09 起', tag: '政策護盤', color: 'emerald', title: '國安基金第 10 次護盤 & 金管會 5 措施', desc: '國安基金可動用約 5,000 億護盤；金管會將借券賣出上限由 30% 降至 3%，融券保證金提高至 130%。' },
+      { date: '2026/11/11', tag: '強彈反攻', color: 'amber', title: '史上第六大漲點 +1,545 點收復 44,000', desc: 'CoreWeave 財報帶動晶片反彈，台股三天合計大漲 4,555 點；外資賣超縮至 7.7 億，投信連 22 買。' },
+      { date: '2026/11/12', tag: '重大人事', color: 'rose', title: '黃仁勳辭去輝達執行長、10Y 重回 5.10%', desc: '輝達宣布黃仁勳辭去總裁、CEO 與董事，財務長柯蕾絲暫代；胡塞組織攻擊沙烏地石油設施。' },
+      { date: '2026/11/16 - 11/17', tag: '財報前震盪', color: 'amber', title: '高盛調降台股評等、盤中再破 4 萬', desc: '高盛將台股降至中立，市場傳 Vera Rubin 延後；11/17 盤中破 4 萬後 5 分鐘急拉逾千點。' },
+      { date: '2026/11/17 - 11/18', tag: '利多出盡', color: 'amber', title: '輝達 Q3 財報報喜但股價反跌', desc: '輝達營收 1,158 億優於預期，但毛利率降至 71.5% 且董事會不讓黃仁勳回任，財報後反跌 2.89%。' },
+      { date: '2026/11/19', tag: 'IPO 抽血', color: 'rose', title: 'Anthropic 掛牌首日漲 17%，美股全面翻黑', desc: 'Anthropic IPO 定價 83 美元收 97.17；美股開高走低，S&P 跌破 200 日線；台股跌 1,768 點破年線。' },
+      { date: '2026/11/20', tag: '史上第3大跌點', color: 'rose', title: '限空令首日台股重挫 2,393 點 (-6.23%)', desc: '收 36,033.29，上市融資單日暴減 491.41 億創新高，全市場維持率降至 151.78%，追繳 6,462 戶。' },
+      { date: '2026/11/20 美股', tag: 'SEC 調查', color: 'rose', title: '路透報導 SEC 檢視輝達會計，費半 -10.7%', desc: 'NVDA 暴跌 14.01% 收 125.53 美元，台積電 ADR -9.36%，VIX 飆升 26.2% 收 35.89 首度破 30。' },
+      { date: '2026/11/21 清晨', tag: '夜盤預警', color: 'rose', title: '台指期夜盤暴跌 1,881 點收 33,919', desc: '夜盤跌幅達 -5.25%，預告 11/23 週一台股開盤將面臨跳空補跌與近萬戶追繳處分壓力。' },
+      { date: '2026/11/23 起', tag: '下週觀察', color: 'sky', title: '追繳補繳期限與止穩三部曲驗證', desc: '觀察融資單日減幅能否縮至百億內、維持率能否守住 145% 以上，以及外資 9.78 萬口空單是否回補。' }
+    ];
+
+    // -------------------------------------------------------------------------
+    // 3. INDICATOR EVALUATION ENGINE (DYNAMIC TRAFFIC LIGHTS & GAUGES)
+    // -------------------------------------------------------------------------
+    function buildEvaluatedIndicators() {
+      const s = state;
+
+      // Helper to clamp percentage 0..100 for visual gauge pin
+      const clampPct = (val, min, max) => Math.max(3, Math.min(97, ((val - min) / (max - min)) * 100));
+
+      return [
+        // I. 台股槓桿與籌碼 (1-3)
+        {
+          id: 1, num: '①', cat: 'I', catName: 'I. 台股槓桿與籌碼 LEVERAGE',
+          title: '融資餘額 + 全市場維持率',
+          prevLabel: '11/19 讀數',
+          prevVal: `${s.marginPrev.toLocaleString('en-US', { minimumFractionDigits: 1 })}億 / ${s.maintenancePrev.toFixed(2)}%`,
+          currLabel: '11/20 最新',
+          currVal: `${s.marginBalance.toLocaleString('en-US', { minimumFractionDigits: 1 })}億 / ${s.maintenanceRatio.toFixed(2)}%`,
+          badgeSub: `全市場 ${s.maintenanceRatio.toFixed(2)}%`,
+          light: (s.marginBalance > 5500 || s.maintenanceRatio < 140) ? 'red' : (s.marginBalance >= 4000 || s.maintenanceRatio < 155) ? 'amber' : 'green',
+          gaugePct: clampPct(s.marginBalance, 3000, 6600),
+          zones: [
+            { color: 'bg-emerald-500', width: '28%', label: '<4,000億 洗清' },
+            { color: 'bg-amber-500', width: '42%', label: '4,000-5,500億' },
+            { color: 'bg-rose-500', width: '30%', label: '>5,500億極端 / 維持率<140%轉紅' }
+          ],
+          thresholdsText: '>5,500億 歷史極端 ｜ 4,000-5,500億 警戒 ｜ <4,000億 洗清；維持率 <140% 追繳潮轉紅',
+          commentary: `11/20 上市融資單日 ${s.marginDailyChg.toFixed(1)}億 到 ${s.marginBalance.toFixed(1)}億，全市場擔保維持率降至 ${s.maintenanceRatio.toFixed(2)}% 創統計新低。追繳 ${s.marginCallHouseholds.toLocaleString()}戶、斷頭 ${s.forcedLiquidationHouseholds.toLocaleString()}戶雙創新高；若維持率跌破 140% 立即轉紅。`
+        },
+        {
+          id: 2, num: '②', cat: 'I', catName: 'I. 台股槓桿與籌碼 LEVERAGE',
+          title: '融資增減：多殺多壓力',
+          prevLabel: '11/19 累減',
+          prevVal: `累減 -25.9%`,
+          currLabel: '11/20 最新',
+          currVal: `單日 ${s.marginDailyChg.toFixed(1)}億`,
+          badgeSub: `累減 -${s.marginCumDropPct.toFixed(1)}%`,
+          light: (s.marginDailyChg <= -150 || s.marginCumDropPct < 10) ? 'red' : (s.marginDailyChg < -100) ? 'amber' : 'green',
+          gaugePct: clampPct(Math.abs(s.marginDailyChg), 0, 550),
+          zones: [
+            { color: 'bg-emerald-500', width: '18%', label: '百億內收斂' },
+            { color: 'bg-amber-500', width: '10%', label: '-100~-150億' },
+            { color: 'bg-rose-500', width: '72%', label: '單日 -150億以上斷頭潮' }
+          ],
+          thresholdsText: '單日 -150億以上：斷頭潮紅燈 ｜ 累減 <10%：未洗清 ｜ 累減 >15% + 單日收斂百億內：轉綠',
+          commentary: `11/20 單日暴減 ${Math.abs(s.marginDailyChg).toFixed(1)}億，超越 11/6 (-424億) 成最大斷頭日。自 10/12 高點 6,533億累減 ${s.marginCumDropPct.toFixed(1)}% 已遠超 15% 門檻，但單日減幅仍在擴大尚未收斂，週一補繳到期仍有處分賣壓。`
+        },
+        {
+          id: 3, num: '③', cat: 'I', catName: 'I. 台股槓桿與籌碼 LEVERAGE',
+          title: '台指期外資淨空單',
+          prevLabel: '11/19 淨空單',
+          prevVal: `${s.foreignFuturesPrev.toLocaleString()} 口`,
+          currLabel: '11/20 最新',
+          currVal: `${s.foreignFuturesShort.toLocaleString()} 口`,
+          badgeSub: s.foreignFuturesShort < s.foreignFuturesPrev ? '連2日小減' : '空單續增',
+          light: s.foreignFuturesShort > 70000 ? 'red' : s.foreignFuturesShort >= 40000 ? 'amber' : 'green',
+          gaugePct: clampPct(s.foreignFuturesShort, 20000, 110000),
+          zones: [
+            { color: 'bg-emerald-500', width: '22%', label: '<4萬口回補' },
+            { color: 'bg-amber-500', width: '33%', label: '4-7萬口' },
+            { color: 'bg-rose-500', width: '45%', label: '>7萬口 歷史高水位' }
+          ],
+          thresholdsText: '>7萬口 歷史高水位紅燈 ｜ 4-7萬口 黃燈觀察 ｜ 空單快速回補 (<4萬口) 綠燈',
+          commentary: `外資淨空單小減 1,356口至 ${s.foreignFuturesShort.toLocaleString()}口，但空方未平倉同時增加 2,283口至 114,166口，屬多空雙邊加碼。夜盤再跌 ${Math.abs(s.twNightChg).toLocaleString()}點收 ${s.twNightFutures.toLocaleString()}，水位仍近 10 萬口。`
+        },
+
+        // II. 市場參與度 (4-5)
+        {
+          id: 4, num: '④', cat: 'II', catName: 'II. 市場參與度 PARTICIPATION',
+          title: '每日成交值',
+          prevLabel: '11/19 成交值',
+          prevVal: `${s.dailyVolumePrev.toLocaleString()} 億`,
+          currLabel: '11/20 最新',
+          currVal: `${s.dailyVolume.toLocaleString()} 億`,
+          badgeSub: '量縮崩跌',
+          light: s.dailyVolume > 15000 ? 'red' : s.dailyVolume >= 10000 ? 'amber' : 'green',
+          gaugePct: clampPct(s.dailyVolume, 5000, 18000),
+          zones: [
+            { color: 'bg-emerald-500', width: '38%', label: '<1兆 降溫綠燈' },
+            { color: 'bg-amber-500', width: '38%', label: '1 - 1.5兆' },
+            { color: 'bg-rose-500', width: '24%', label: '高檔連續 >1.5兆 過熱' }
+          ],
+          thresholdsText: '高檔連續 >1.5兆 過熱紅燈 ｜ 1-1.5兆 黃燈 ｜ <1兆 降溫綠燈',
+          commentary: `限空令上路首日加權重挫 2,393.60點 (-6.23%) 收 36,033.29，史上第 3 大跌點，上市櫃約 364-369 檔跌停。成交值 ${s.dailyVolume.toLocaleString()}億低於 1 兆元，屬「沒有買盤的無量崩跌」，非籌碼過熱，維持綠燈。`
+        },
+        {
+          id: 5, num: '⑤', cat: 'II', catName: 'II. 市場參與度 PARTICIPATION',
+          title: '散戶逆勢搶進熱度',
+          prevLabel: '11/19 狀態',
+          prevVal: '正2 ETF 跌逾8%',
+          currLabel: '11/20 最新',
+          currVal: s.retailHeatState === 'red' ? '跌市搶買創紀錄' : s.retailHeatState === 'amber' ? '內資踩踏出場' : '熱度退潮洗清',
+          badgeSub: '投信轉賣 87億',
+          light: s.retailHeatState,
+          gaugePct: s.retailHeatState === 'green' ? 18 : s.retailHeatState === 'amber' ? 54 : 88,
+          zones: [
+            { color: 'bg-emerald-500', width: '33%', label: '熱度退潮=洗清' },
+            { color: 'bg-amber-500', width: '34%', label: '內資踩踏中' },
+            { color: 'bg-rose-500', width: '33%', label: '跌市搶買創紀錄' }
+          ],
+          thresholdsText: '跌市搶買創紀錄 紅燈 ｜ 內資踩踏出場 黃燈 ｜ 熱度退潮 + 融資收斂洗清 綠燈',
+          commentary: `11/20 投信由連買轉賣 87.49億，自營商大賣 340.84億 (避險 290.16億)，內資合計賣超 428億為外資 4.5 倍。散戶從接刀轉為被迫斷頭出場，但須等融資單日減幅收斂才算真正洗清。`
+        },
+
+        // III. 美股、利率與跨資產 (6-10)
+        {
+          id: 6, num: '⑥', cat: 'III', catName: 'III. 美股、利率與跨資產 US RELATIVE POSITION',
+          title: '費城半導體回檔深度',
+          prevLabel: '11/19 收盤',
+          prevVal: `${s.soxPrev.toLocaleString()} (約-35%)`,
+          currLabel: '11/20 最新',
+          currVal: `${s.sox.toLocaleString()} (約${s.soxDrawdownPct.toFixed(0)}%)`,
+          badgeSub: `單日 ${s.soxChgPct.toFixed(1)}%`,
+          light: s.soxDrawdownPct <= -20 ? 'red' : s.soxDrawdownPct <= -10 ? 'amber' : 'green',
+          gaugePct: clampPct(Math.abs(s.soxDrawdownPct), 0, 50),
+          zones: [
+            { color: 'bg-emerald-500', width: '20%', label: '收復 -10% 內' },
+            { color: 'bg-amber-500', width: '20%', label: '-10% 修正' },
+            { color: 'bg-rose-500', width: '60%', label: '-20% 熊市門檻紅燈' }
+          ],
+          thresholdsText: '收復 -10% 內 綠燈 ｜ -10% 修正警戒 ｜ -20% 熊市門檻紅燈',
+          commentary: `路透報導 SEC 檢視輝達會計處理，NVDA 暴跌 14.01% 收 125.53 美元，費半重挫 ${Math.abs(s.soxChgPct).toFixed(2)}% 收 ${s.sox.toLocaleString()} 創本輪新低。台積電 ADR -9.36% 收 319.14 美元 (折台股約 2,102 元)。`
+        },
+        {
+          id: 7, num: '⑦', cat: 'III', catName: 'III. 美股、利率與跨資產 US RELATIVE POSITION',
+          title: 'S&P 500 回檔 vs 期中年均值',
+          prevLabel: '11/19 收盤',
+          prevVal: `${s.sp500Prev.toLocaleString()} (約-8.2%)`,
+          currLabel: '11/20 最新',
+          currVal: `${s.sp500.toLocaleString()} (約${s.sp500DrawdownPct.toFixed(1)}%)`,
+          badgeSub: '進入修正',
+          light: s.sp500DrawdownPct > -5 ? 'red' : s.sp500DrawdownPct > -18 ? 'amber' : 'green',
+          gaugePct: clampPct(Math.abs(s.sp500DrawdownPct), 0, 22),
+          zones: [
+            { color: 'bg-rose-500', width: '23%', label: '<5%+極端' },
+            { color: 'bg-amber-500', width: '59%', label: '回檔 5-15% 修正區' },
+            { color: 'bg-emerald-500', width: '18%', label: '≥18% 到位' }
+          ],
+          thresholdsText: '距高點 <5%+投機極端 紅燈 ｜ 回檔 5-15% 黃燈 ｜ 回檔 ≥18% (約6,410) 到位轉綠',
+          commentary: `S&P 500 連 7 跌 (2020/2 以來最長)，單日 -3.70% 收 ${s.sp500.toLocaleString()}，距 10 月高點 7,819 回檔 ${Math.abs(s.sp500DrawdownPct).toFixed(1)}% 正式進入修正；期中年平均最大回檔約 -18% (對應約 6,410 點)。`
+        },
+        {
+          id: 8, num: '⑧', cat: 'III', catName: 'III. 美股、利率與跨資產 US RELATIVE POSITION',
+          title: '美債 10 年期殖利率',
+          prevLabel: '11/19 殖利率',
+          prevVal: `約 ${s.us10yPrev.toFixed(2)}%`,
+          currLabel: '11/20 最新',
+          currVal: `${s.us10y.toFixed(2)}%`,
+          badgeSub: s.us10y < 5.0 ? '跌破 5%' : '高檔壓迫',
+          light: s.us10y > 4.5 ? 'red' : s.us10y >= 4.3 ? 'amber' : 'green',
+          gaugePct: clampPct(s.us10y, 3.8, 5.4),
+          zones: [
+            { color: 'bg-emerald-500', width: '31%', label: '<4.3% 壓力解除' },
+            { color: 'bg-amber-500', width: '13%', label: '4.3-4.5%' },
+            { color: 'bg-rose-500', width: '56%', label: '>4.5% 殺估值區紅燈' }
+          ],
+          thresholdsText: '>4.5% 殺估值區紅燈 ｜ 4.3-4.5% 黃燈 ｜ <4.3% 壓力解除綠燈',
+          commentary: `股市重挫吸引避險買盤，10Y 殖利率大降 12 個基點至 ${s.us10y.toFixed(2)}% (本輪首度收在 5% 以下)。但聯準會官員仍偏鷹，Kalshi 顯示 12/9 升息一碼機率約 90%，仍高於 4.5% 殺估值區。`
+        },
+        {
+          id: 9, num: '⑨', cat: 'III', catName: 'III. 美股、利率與跨資產 US RELATIVE POSITION',
+          title: '美元指數 DXY',
+          prevLabel: '11/19 指數',
+          prevVal: `約 ${s.dxyPrev.toFixed(2)}`,
+          currLabel: '11/20 最新',
+          currVal: `約 ${s.dxy.toFixed(2)}`,
+          badgeSub: '高檔持平',
+          light: s.dxy > 102 ? 'red' : s.dxy >= 100 ? 'amber' : 'green',
+          gaugePct: clampPct(s.dxy, 97, 106),
+          zones: [
+            { color: 'bg-emerald-500', width: '33%', label: '<100 見頂回落' },
+            { color: 'bg-amber-500', width: '22%', label: '100-102 盤旋' },
+            { color: 'bg-rose-500', width: '45%', label: '>102 / 急升=risk-off' }
+          ],
+          thresholdsText: '>102 / 急升=risk-off 紅燈 ｜ 100-102 高檔盤旋 ｜ <100 見頂回落綠燈',
+          commentary: `美元指數小跌 0.07% 至 ${s.dxy.toFixed(2)}，仍處 2025 年 4 月以來高點附近。美債殖利率大降而美元未明顯回落，顯示聯準會升息預期與全球避險需求仍在支撐強勢美元。`
+        },
+        {
+          id: 10, num: '⑩', cat: 'III', catName: 'III. 美股、利率與跨資產 US RELATIVE POSITION',
+          title: '跨資產：比特幣 + 黃金',
+          prevLabel: '11/19 黃金',
+          prevVal: `約 $${s.goldPrev.toLocaleString()}`,
+          currLabel: '11/20 最新',
+          currVal: `金 $${s.gold.toLocaleString()} / BTC ${(s.btc/10000).toFixed(2)}萬`,
+          badgeSub: '金-4.6% 幣破6萬',
+          light: s.crossAssetState,
+          gaugePct: s.crossAssetState === 'green' ? 18 : s.crossAssetState === 'amber' ? 50 : 88,
+          zones: [
+            { color: 'bg-emerald-500', width: '33%', label: '避險資產回升' },
+            { color: 'bg-amber-500', width: '34%', label: 'BTC 腰斬區' },
+            { color: 'bg-rose-500', width: '33%', label: '金股齊跌=流動性賣壓' }
+          ],
+          thresholdsText: '金股齊跌=流動性賣壓 紅燈 ｜ BTC 腰斬區 黃燈 ｜ 避險資產止跌回升 綠燈',
+          commentary: `黃金期貨再跌 4.63% 至 $${s.gold.toLocaleString()} (三天跌約 9%)，白銀暴跌 7.41%，比特幣跌破 6 萬至 $${s.btc.toLocaleString()}。股、金、銀、幣全面同跌，呈現典型「流動性去槓桿與追繳變現賣壓」。`
+        },
+
+        // IV. 資金流向與情緒 (11-13)
+        {
+          id: 11, num: '⑪', cat: 'IV', catName: 'IV. 資金流向與情緒 FLOWS & SENTIMENT',
+          title: '外資現貨買賣超',
+          prevLabel: '11/19 單日',
+          prevVal: `${s.foreignSpotPrev.toFixed(1)} 億`,
+          currLabel: '11/20 最新',
+          currVal: `${s.foreignSpotFlow > 0 ? '+' : ''}${s.foreignSpotFlow.toFixed(1)} 億`,
+          badgeSub: s.foreignSpotFlow >= 0 ? '轉買回補' : '賣超收斂到94億',
+          light: s.foreignSpotFlow <= -200 ? 'red' : s.foreignSpotFlow < 0 ? 'amber' : 'green',
+          gaugePct: clampPct(s.foreignSpotFlow, -800, 300),
+          zones: [
+            { color: 'bg-rose-500', width: '54%', label: '連10日以上大賣超' },
+            { color: 'bg-amber-500', width: '18%', label: '賣超收斂 (<200億)' },
+            { color: 'bg-emerald-500', width: '28%', label: '連買 3-5 日止穩' }
+          ],
+          thresholdsText: '連10日以上大賣超 紅燈 ｜ 賣超收斂 黃燈 ｜ 連買 3-5 日 止穩綠燈',
+          commentary: `外資連 5 賣，但金額從 766億、243億大幅縮減至 ${Math.abs(s.foreignSpotFlow).toFixed(1)}億 (本週最小)，且反手加碼聯電等 19 檔投信賣超股。依規則由紅轉黃，須見連買 3-5 日才算止穩。`
+        },
+        {
+          id: 12, num: '⑫', cat: 'IV', catName: 'IV. 資金流向與情緒 FLOWS & SENTIMENT',
+          title: '新台幣匯率',
+          prevLabel: '11/19 收盤',
+          prevVal: `${s.usdTwdPrev.toFixed(3)}`,
+          currLabel: '11/20 最新',
+          currVal: `${s.usdTwd.toFixed(3)}`,
+          badgeSub: '股崩匯穩',
+          light: s.usdTwd >= 33.05 ? 'red' : s.usdTwd >= 32.50 ? 'amber' : 'green',
+          gaugePct: clampPct(s.usdTwd, 32.0, 33.3),
+          zones: [
+            { color: 'bg-emerald-500', width: '38%', label: '<32.5 止貶回升' },
+            { color: 'bg-amber-500', width: '42%', label: '32.5-33.0 止貶觀察' },
+            { color: 'bg-rose-500', width: '20%', label: '續貶破底 (>33.05)' }
+          ],
+          thresholdsText: '續貶破底 紅燈 ｜ 32.0-32.5 / 止貶盤整 黃燈 ｜ 止貶回升=止穩 綠燈',
+          commentary: `盤中最低 33.04 未再破前日低點，尾盤央行調節收 ${s.usdTwd.toFixed(3)} (小升 0.6 分)。台股崩跌 6.23% 而台幣小升，呈現「股崩匯穩」不同調，外匯局表示供需趨於平衡。`
+        },
+        {
+          id: 13, num: '⑬', cat: 'IV', catName: 'IV. 資金流向與情緒 FLOWS & SENTIMENT',
+          title: '恐懼貪婪 + VIX 恐慌指數',
+          prevLabel: '11/19 讀數',
+          prevVal: `VIX ${s.vixPrev.toFixed(2)}`,
+          currLabel: '11/20 最新',
+          currVal: `VIX ${s.vix.toFixed(2)} / F&G ${s.fng}`,
+          badgeSub: s.vix > 30 && s.fng < 20 ? '洗底雙條件達成' : 'VIX 破 30',
+          light: (s.fng > 75 || s.vix < 15) ? 'red' : (s.vix > 30 && s.fng < 20) ? 'green' : 'amber',
+          gaugePct: clampPct(s.vix, 12, 45),
+          zones: [
+            { color: 'bg-rose-500', width: '15%', label: '低波動貪婪' },
+            { color: 'bg-amber-500', width: '45%', label: 'F&G 20-45 / 單項VIX>30' },
+            { color: 'bg-emerald-500', width: '40%', label: 'F&G<20 + VIX>30 洗底綠燈' }
+          ],
+          thresholdsText: 'F&G >75 貪婪紅燈 ｜ F&G 20-45 或 VIX >30 單項 黃燈 ｜ F&G <20 + VIX >30 洗底轉綠',
+          commentary: `VIX 大漲 26.2% 收 ${s.vix.toFixed(2)} (盤中觸及 37.1)，本輪首度收在 30 以上；洗底條件「VIX > 30」已達成，另一項「CNN F&G < 20」11/20 未取得讀數 (目前設為 ${s.fng})，若確認低於 20 即轉綠燈。`
+        },
+
+        // V. 亞洲領先指標 (14)
+        {
+          id: 14, num: '⑭', cat: 'V', catName: 'V. 亞洲領先指標 ASIA LEAD INDICATOR',
+          title: '南韓 KOSPI 位置與節奏',
+          prevLabel: '11/19 收盤',
+          prevVal: `${s.kospiPrev.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          currLabel: '11/20 最新',
+          currVal: `${s.kospi.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          badgeSub: `${s.kospiChgPct.toFixed(2)}% 收盤新低`,
+          light: s.kospi < 5000 ? 'red' : s.kospi < 5820 ? 'amber' : 'green',
+          gaugePct: clampPct(s.kospi, 4500, 6200),
+          zones: [
+            { color: 'bg-rose-500', width: '30%', label: '<5,000 破底紅燈' },
+            { color: 'bg-amber-500', width: '48%', label: '5,000-5,820 整理' },
+            { color: 'bg-emerald-500', width: '22%', label: '收復 5,820 止穩' }
+          ],
+          thresholdsText: '收盤續創新低/破5,000防線 紅燈 ｜ 區間整理+下影承接 黃燈 ｜ 外資連買+收復5,820 止穩綠燈',
+          commentary: `反彈 2 天後再度重挫 ${Math.abs(s.kospiChgPct).toFixed(2)}% 收 ${s.kospi.toLocaleString()}，跌破 5,000 防線與 11/17 低點創本輪收盤新低。三星電子 -7%、海力士 -5.91%，外資淨賣 1.13 兆韓元；台股要止穩需韓股同步站穩。`
+        }
+      ];
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. 8-SIGNAL STABILIZATION CHECKLIST EVALUATION
+    // -------------------------------------------------------------------------
+    function evaluateStabilizationSignals() {
+      const s = state;
+      return [
+        {
+          name: '● 融資清洗',
+          cond: '累計減 ≥15% + 單日增減收斂至百億內 (②)',
+          status: (s.marginCumDropPct >= 15 && s.marginDailyChg > -100) ? 'pass' : (s.marginCumDropPct >= 15 ? 'partial' : 'fail'),
+          reading: `累減 ${s.marginCumDropPct.toFixed(1)}%；單日 ${s.marginDailyChg.toFixed(1)}億，全市場維持率 ${s.maintenanceRatio.toFixed(2)}%`
+        },
+        {
+          name: '● 外資空單回補',
+          cond: '淨空單快速回補至 7 萬口以下 (③)',
+          status: s.foreignFuturesShort < 70000 ? 'pass' : (s.foreignFuturesShort <= 90000 ? 'partial' : 'fail'),
+          reading: `${s.foreignFuturesPrev.toLocaleString()} → ${s.foreignFuturesShort.toLocaleString()}口 (僅小減 ${(s.foreignFuturesPrev - s.foreignFuturesShort).toLocaleString()}口)`
+        },
+        {
+          name: '● 外資轉買',
+          cond: '現貨連買 3-5 日 (⑪)',
+          status: s.foreignSpotFlow >= 100 ? 'pass' : (s.foreignSpotFlow > -120 && s.foreignSpotFlow < 0 ? 'fail' : (s.foreignSpotFlow >= 0 ? 'partial' : 'fail')),
+          reading: `${s.foreignSpotPrev.toFixed(1)}億 → ${s.foreignSpotFlow > 0 ? '+' : ''}${s.foreignSpotFlow.toFixed(1)}億，連5賣但賣超收斂`
+        },
+        {
+          name: '● 台幣止貶',
+          cond: '止貶回升、不破前低 (⑫)',
+          status: s.usdTwd < 32.50 ? 'pass' : (s.usdTwd <= 33.04 ? 'partial' : 'fail'),
+          reading: `收 ${s.usdTwd.toFixed(3)} 小升，盤中 33.04 未再破底`
+        },
+        {
+          name: '● 量價結構',
+          cond: '縮量止跌後帶量長紅 (④)',
+          status: (s.taiexChgPct > 1.5 && s.dailyVolume >= 9500) ? 'pass' : (s.taiexChgPct >= 0 ? 'partial' : 'fail'),
+          reading: `${s.dailyVolume.toLocaleString()}億，加權收 ${s.taiexChgPct > 0 ? '+' : ''}${s.taiexChgPct.toFixed(2)}%，跌破 11/6 盤中低點`
+        },
+        {
+          name: '● 利率 / 美元',
+          cond: '美債 10Y < 4.3% 或 DXY 見頂回落 < 100 (⑧⑨)',
+          status: (s.us10y < 4.3 || s.dxy < 100) ? 'pass' : ((s.us10y < 4.6 && s.dxy < 102) ? 'partial' : 'fail'),
+          reading: `10Y ${s.us10y.toFixed(2)}% (跌破5%但仍>4.5%)；DXY 約 ${s.dxy.toFixed(2)}`
+        },
+        {
+          name: '● 黃金避險',
+          cond: '黃金止跌回升、金股不再齊跌 (⑩)',
+          status: (s.crossAssetState === 'green' || s.goldChgPct > 0.5) ? 'pass' : (s.goldChgPct > -1 ? 'partial' : 'fail'),
+          reading: `黃金約 $${s.gold.toLocaleString()} (${s.goldChgPct.toFixed(1)}%)，與 S&P ${s.sp500ChgPct.toFixed(1)}% 同步下跌`
+        },
+        {
+          name: '● 南韓 KOSPI',
+          cond: '外資連買 2 日 + 收盤站上 5,820 (⑭)',
+          status: s.kospi >= 5820 ? 'pass' : (s.kospi >= 5000 ? 'partial' : 'fail'),
+          reading: `${s.kospiPrev.toLocaleString()} → ${s.kospi.toLocaleString()}，失守 5,000 創收盤新低`
+        }
+      ];
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. RENDERING FUNCTIONS: TOP TICKER & 14 INDICATOR CARDS
+    // -------------------------------------------------------------------------
+    function renderTopTicker() {
+      const s = state;
+      const tickers = [
+        { name: '加權指數', val: s.taiex.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), sub: `${s.taiexChgPct > 0 ? '+' : ''}${s.taiexChgPct.toFixed(2)}% | 週${s.taiexWeekPct.toFixed(1)}%`, neg: s.taiexChgPct < 0 },
+        { name: '台指期夜盤', val: s.twNightFutures.toLocaleString(), sub: `${s.twNightChg > 0 ? '+' : ''}${s.twNightChg.toLocaleString()} (${s.twNightChgPct.toFixed(2)}%)`, neg: s.twNightChg < 0 },
+        { name: '上市融資餘額', val: `${s.marginBalance.toFixed(1)}億`, sub: `單日 ${s.marginDailyChg.toFixed(1)}億 | -${s.marginCumDropPct.toFixed(1)}%`, neg: s.marginDailyChg < 0 },
+        { name: '全市場維持率', val: `${s.maintenanceRatio.toFixed(2)}%`, sub: `追繳 ${s.marginCallHouseholds.toLocaleString()}戶 / 斷頭 ${s.forcedLiquidationHouseholds}戶`, neg: s.maintenanceRatio < 155 },
+        { name: '外資期貨空單', val: `${s.foreignFuturesShort.toLocaleString()}口`, sub: `前值 ${s.foreignFuturesPrev.toLocaleString()}口`, neg: s.foreignFuturesShort > 70000 },
+        { name: '新台幣匯率', val: s.usdTwd.toFixed(3), sub: `盤中低 33.04 (股崩匯穩)`, neg: s.usdTwd > 32.9 },
+        { name: '南韓 KOSPI', val: s.kospi.toLocaleString('en-US', { minimumFractionDigits: 2 }), sub: `${s.kospiChgPct > 0 ? '+' : ''}${s.kospiChgPct.toFixed(2)}% (破5,000)`, neg: s.kospiChgPct < 0 },
+        { name: '費城半導體 SOX', val: s.sox.toLocaleString('en-US', { minimumFractionDigits: 2 }), sub: `${s.soxChgPct.toFixed(2)}% (回檔${s.soxDrawdownPct.toFixed(0)}%)`, neg: s.soxChgPct < 0 },
+        { name: 'NVDA 輝達', val: `$${s.nvda.toFixed(2)}`, sub: `${s.nvdaChgPct.toFixed(2)}% (SEC檢視)`, neg: s.nvdaChgPct < 0 },
+        { name: '台積電 ADR', val: `$${s.tsmAdr.toFixed(2)}`, sub: `${s.tsmAdrChgPct.toFixed(2)}% (折台股2,102)`, neg: s.tsmAdrChgPct < 0 },
+        { name: 'VIX 恐慌指數', val: s.vix.toFixed(2), sub: `+${s.vixChgPct.toFixed(1)}% (本輪首破30)`, neg: s.vix > 25 },
+        { name: 'S&P 500', val: s.sp500.toLocaleString('en-US', { minimumFractionDigits: 2 }), sub: `${s.sp500ChgPct.toFixed(2)}% (距高點${s.sp500DrawdownPct.toFixed(1)}%)`, neg: s.sp500ChgPct < 0 },
+        { name: '美債 10Y 殖利率', val: `${s.us10y.toFixed(2)}%`, sub: `前值 ${s.us10yPrev.toFixed(2)}% (跌破5%)`, neg: s.us10y > 4.5 },
+        { name: '美元指數 DXY', val: s.dxy.toFixed(2), sub: `高檔持平 (>102警戒)`, neg: s.dxy > 102 },
+        { name: '黃金期貨', val: `$${s.gold.toLocaleString()}`, sub: `${s.goldChgPct.toFixed(2)}% (三日跌9%)`, neg: s.goldChgPct < 0 },
+        { name: '比特幣 BTC', val: `$${s.btc.toLocaleString()}`, sub: `${s.btcChgPct.toFixed(2)}% (跌破6萬)`, neg: s.btcChgPct < 0 }
+      ];
+
+      const grid = document.getElementById('topTickerGrid');
+      grid.innerHTML = tickers.map(t => `
+        <div class="bg-[#111827]/90 hover:bg-[#161f32] border border-[#1f2937] rounded-md px-2.5 py-1.5 transition-colors">
+          <div class="flex items-center justify-between text-[10px] text-slate-400">
+            <span class="truncate font-medium">${t.name}</span>
+            <span class="w-1.5 h-1.5 rounded-full ${t.neg ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+          </div>
+          <div class="font-mono font-bold text-xs sm:text-[13px] text-white tabular-nums mt-0.5 truncate">${t.val}</div>
+          <div class="font-mono text-[10px] tabular-nums truncate ${t.neg ? 'text-rose-400' : 'text-emerald-400'}">${t.sub}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderIndicatorsAndSummary() {
+      const indicators = buildEvaluatedIndicators();
+
+      // Update Counts in Header & Filters
+      const redCount = indicators.filter(i => i.light === 'red').length;
+      const amberCount = indicators.filter(i => i.light === 'amber').length;
+      const greenCount = indicators.filter(i => i.light === 'green').length;
+
+      document.getElementById('hdrRedCount').textContent = redCount;
+      document.getElementById('hdrAmberCount').textContent = amberCount;
+      document.getElementById('hdrGreenCount').textContent = greenCount;
+      document.getElementById('fltRed').textContent = redCount;
+      document.getElementById('fltAmber').textContent = amberCount;
+      document.getElementById('fltGreen').textContent = greenCount;
+
+      // Filter indicators
+      const filtered = indicators.filter(ind => {
+        const matchLight = lightFilter === 'all' || ind.light === lightFilter;
+        const matchCat = categoryFilter === 'all' || ind.cat === categoryFilter;
+        return matchLight && matchCat;
+      });
+
+      // Group by category
+      const groups = [
+        { cat: 'I', title: 'I. 台股槓桿與籌碼 LEVERAGE (指標 1–3)' },
+        { cat: 'II', title: 'II. 市場參與度 PARTICIPATION (指標 4–5)' },
+        { cat: 'III', title: 'III. 美股、利率與跨資產 US RELATIVE POSITION (指標 6–10)' },
+        { cat: 'IV', title: 'IV. 資金流向與情緒 FLOWS & SENTIMENT (指標 11–13)' },
+        { cat: 'V', title: 'V. 亞洲領先指標 ASIA LEAD INDICATOR (指標 14)' }
+      ];
+
+      const container = document.getElementById('indicatorsContainer');
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="terminal-card p-8 text-center text-slate-400 text-sm">目前篩選條件下無符合指標，請切換燈號或分類篩選器。</div>`;
+        return;
+      }
+
+      container.innerHTML = groups.map(g => {
+        const items = filtered.filter(i => i.cat === g.cat);
+        if (items.length === 0) return '';
+
+        const cardsHtml = items.map(ind => {
+          const badgeMap = {
+            red: { bg: 'bg-rose-500/15', text: 'text-rose-400', border: 'border-rose-500/40', dot: 'bg-rose-500', label: '紅燈・危險/極端', cardAccent: 'border-l-rose-500' },
+            amber: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/40', dot: 'bg-amber-500', label: '黃燈・警戒/進行', cardAccent: 'border-l-amber-500' },
+            green: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/40', dot: 'bg-emerald-500', label: '綠燈・訊號解除', cardAccent: 'border-l-emerald-500' }
+          };
+          const st = badgeMap[ind.light];
+
+          return `
+            <article class="terminal-card p-4 border-l-4 ${st.cardAccent} flex flex-col justify-between gap-3">
+              <div>
+                <!-- Top Row: Number + Title + Traffic Light Badge -->
+                <div class="flex items-start justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-base font-extrabold text-sky-400">${ind.num}</span>
+                    <h4 class="text-sm sm:text-[15px] font-bold text-white leading-snug">${ind.title}</h4>
+                  </div>
+                  <span class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.bg} ${st.text} ${st.border}">
+                    <span class="w-2 h-2 rounded-full ${st.dot}"></span>
+                    ${st.label}
+                  </span>
+                </div>
+
+                <!-- Previous -> Latest Comparison Box (Left: Prev, Right: Latest) -->
+                <div class="grid grid-cols-11 items-center gap-1 bg-[#0b0f19] border border-slate-800/90 rounded-lg p-2.5 mb-3">
+                  <div class="col-span-5">
+                    <div class="text-[10px] text-slate-400">${ind.prevLabel}</div>
+                    <div class="font-mono text-xs sm:text-sm font-semibold text-slate-300 tabular-nums mt-0.5">${ind.prevVal}</div>
+                  </div>
+                  <div class="col-span-1 text-center text-slate-500 font-mono text-sm">→</div>
+                  <div class="col-span-5 text-right">
+                    <div class="text-[10px] text-slate-400">${ind.currLabel}</div>
+                    <div class="font-mono text-xs sm:text-sm font-extrabold ${st.text} tabular-nums mt-0.5">${ind.currVal}</div>
+                    <div class="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-slate-800 text-[10px] font-mono text-slate-200">${ind.badgeSub}</div>
+                  </div>
+                </div>
+
+                <!-- Visual Threshold Gauge -->
+                <div class="mb-2.5">
+                  <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                    <span>警戒線位置刻度</span>
+                    <span class="font-mono text-slate-300">目前讀數標記 ▼</span>
+                  </div>
+                  <div class="relative h-3 w-full rounded-full overflow-hidden flex bg-slate-800 border border-slate-700">
+                    ${ind.zones.map(z => `<div class="${z.color}/80 h-full border-r border-[#0b0f19]/60 last:border-r-0" style="width:${z.width}" title="${z.label}"></div>`).join('')}
+                    <!-- Indicator Marker Pin -->
+                    <div class="absolute top-0 bottom-0 w-1.5 bg-white shadow-[0_0_8px_#ffffff] ring-1 ring-black transition-all duration-300" style="left: calc(${ind.gaugePct}% - 3px)"></div>
+                  </div>
+                  <div class="text-[10px] text-slate-400 font-mono mt-1 leading-tight">${ind.thresholdsText}</div>
+                </div>
+              </div>
+
+              <!-- Commentary -->
+              <p class="text-xs text-slate-300 leading-relaxed pt-2 border-t border-slate-800/80">
+                ${ind.commentary}
+              </p>
+            </article>
+          `;
+        }).join('');
+
+        return `
+          <div class="space-y-3">
+            <div class="flex items-center gap-2">
+              <h3 class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-300">${g.title}</h3>
+              <div class="h-px flex-1 bg-slate-800"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              ${cardsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. RENDERING THREE MARKET HEATMAPS
+    // -------------------------------------------------------------------------
+    function getSP500Color(pct) {
+      if (pct <= -18) return '#6b141a';
+      if (pct <= -12) return '#881b24';
+      if (pct <= -7)  return '#b91c1c';
+      if (pct <= -3)  return '#dc2626';
+      if (pct < 0)    return '#f87171';
+      if (pct === 0)  return '#475569';
+      if (pct < 2)    return '#10b981';
+      return '#059669';
+    }
+
+    function renderSP500Heatmap() {
+      const sectorFilter = document.getElementById('spSectorFilter').value;
+      const container = document.getElementById('sp500TreemapCanvas');
+
+      const sectorsOrder = [
+        { name: 'Electronic technology', colSpan: 'lg:col-span-4' },
+        { name: 'Technology services', colSpan: 'lg:col-span-4' },
+        { name: 'Retail trade', colSpan: 'lg:col-span-2' },
+        { name: 'Producer manufacturing', colSpan: 'lg:col-span-2' },
+        { name: 'Finance', colSpan: 'lg:col-span-4' },
+        { name: 'Health technology', colSpan: 'lg:col-span-3' },
+        { name: 'Energy minerals', colSpan: 'lg:col-span-2' },
+        { name: 'Consumer durables', colSpan: 'lg:col-span-1' },
+        { name: 'Consumer non-durables', colSpan: 'lg:col-span-2' }
+      ];
+
+      const visibleSectors = sectorFilter === 'ALL'
+        ? sectorsOrder
+        : [{ name: sectorFilter, colSpan: 'lg:col-span-12' }];
+
+      container.innerHTML = visibleSectors.map(sec => {
+        const stocks = SP500_DATA.filter(s => s.sector === sec.name).sort((a, b) => b.cap - a.cap);
+        const totalCap = stocks.reduce((acc, s) => acc + s.cap, 0);
+
+        const tilesHtml = stocks.map(st => {
+          const share = (st.cap / totalCap) * 100;
+          const isLarge = share > 24 || sectorFilter !== 'ALL';
+          const bg = getSP500Color(st.chg1w);
+          const textColor = st.chg1w < 0 && st.chg1w > -3 ? 'text-slate-950' : 'text-white';
+          const sign = st.chg1w > 0 ? '+' : '';
+
+          return `
+            <div
+              class="treemap-tile rounded p-2 flex flex-col items-center justify-center text-center cursor-pointer select-none border border-black/30 ${isLarge ? 'col-span-2 row-span-2 min-h-[86px]' : 'col-span-1 min-h-[54px]'}"
+              style="background-color: ${bg};"
+              onmousemove="showTooltip(event, '<strong>${st.ticker}</strong> · ${st.name}<br/><span class=\\'text-slate-400\\'>板塊：${st.sector}</span><br/>1週漲跌：<span class=\\'font-mono font-bold ${st.chg1w < 0 ? 'text-rose-400' : 'text-emerald-400'}\\'>${sign}${st.chg1w.toFixed(2)}%</span><br/>11/20單日：<span class=\\'font-mono\\'>${st.chg1d > 0 ? '+' : ''}${st.chg1d.toFixed(2)}%</span>')"
+              onmouseleave="hideTooltip()"
+            >
+              <div class="font-extrabold tracking-tight ${isLarge ? 'text-sm sm:text-base' : 'text-xs'} ${textColor}">${st.ticker}</div>
+              <div class="font-mono font-bold tabular-nums ${isLarge ? 'text-xs sm:text-sm' : 'text-[10px]'} ${textColor} opacity-95">${sign}${st.chg1w.toFixed(2)}%</div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="${sec.colSpan} bg-[#111827] rounded-lg p-2 border border-slate-800 flex flex-col">
+            <div class="text-[11px] font-bold text-slate-300 mb-1.5 flex items-center justify-between truncate">
+              <span class="truncate">${sec.name} &rsaquo;</span>
+              <span class="text-[10px] font-mono text-slate-500">${stocks.length}檔</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 flex-1">
+              ${tilesHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getFuturesColor(chg) {
+      if (chg === null || chg === undefined) return { bg: '#2c354d', text: 'text-slate-200' };
+      if (chg <= -12) return { bg: '#ef4444', text: 'text-white' };
+      if (chg <= -5)  return { bg: '#f85c5c', text: 'text-white' };
+      if (chg <= -1)  return { bg: '#f26d6d', text: 'text-white' };
+      if (chg < 0)    return { bg: '#f5c6c6', text: 'text-slate-900' };
+      return { bg: '#748cd4', text: 'text-white' }; // Soft periwinkle blue matching screenshot for JP-YEN & US-DOLLAR
+    }
+
+    function renderFuturesHeatmap() {
+      const checkedCats = Array.from(document.querySelectorAll('input[data-fut-cat]:checked')).map(el => el.dataset.futCat);
+      const grid = document.getElementById('futuresHeatmapGrid');
+      const items = FUTURES_DATA.filter(f => checkedCats.includes(f.cat));
+
+      if (items.length === 0) {
+        grid.innerHTML = `<div class="col-span-full py-12 text-center text-xs text-slate-400">請至少勾選一項資產類別 (Commodities / Crypto / Currencies / Indices)</div>`;
+        return;
+      }
+
+      grid.innerHTML = items.map(item => {
+        const style = getFuturesColor(item.chg);
+        const valStr = item.chg === null ? 'N/A' : `${item.chg > 0 ? '+' : ''}${item.chg.toFixed(2)}%`;
+
+        return `
+          <div
+            class="treemap-tile rounded-md p-2.5 flex flex-col items-center justify-center text-center min-h-[76px] cursor-pointer select-none shadow-sm"
+            style="background-color: ${style.bg};"
+            onmousemove="showTooltip(event, '<strong>${item.label}</strong> (${item.name})<br/><span class=\\'text-slate-400\\'>類別：${item.cat}</span><br/>最新報價：<span class=\\'font-mono text-white\\'>${item.price}</span><br/>週變動：<span class=\\'font-mono font-bold\\'>${valStr}</span>')"
+            onmouseleave="hideTooltip()"
+          >
+            <div class="font-extrabold text-xs sm:text-[13px] tracking-wide ${style.text}">${item.label}</div>
+            <div class="font-mono font-bold text-xs sm:text-sm tabular-nums mt-1 ${style.text}">${valStr}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getTwStockColor(pct) {
+      // Exact Taiwan screenshot palette: Red for negative, Teal/Green for positive
+      if (pct >= 50)  return { bg: '#2e8b68', text: 'text-white' };
+      if (pct >= 30)  return { bg: '#68b094', text: 'text-slate-950' };
+      if (pct >= 10)  return { bg: '#a3d1be', text: 'text-slate-950' };
+      if (pct > 0)    return { bg: '#cbd5e1', text: 'text-slate-950' };
+      if (pct > -10)  return { bg: '#f5c2c2', text: 'text-slate-950' };
+      if (pct > -30)  return { bg: '#f29b9b', text: 'text-slate-950' };
+      if (pct > -50)  return { bg: '#e65c5c', text: 'text-white' };
+      return { bg: '#d92626', text: 'text-white' };
+    }
+
+    function renderTwSectorHeatmap() {
+      const container = document.getElementById('twTreemapCanvas');
+      const tf = twTimeframe;
+
+      if (twGroupMode === 'flat') {
+        const sorted = [...TW_STOCKS_DATA].sort((a, b) => b.weight - a.weight);
+        container.innerHTML = `
+          <div class="grid grid-cols-3 sm:grid-cols-5 gap-1.5 h-full">
+            ${sorted.map(st => {
+              const pct = st.perf[tf];
+              const style = getTwStockColor(pct);
+              const isHero = st.code === '2330';
+              const sign = pct > 0 ? '+' : '';
+              return `
+                <div
+                  class="treemap-tile rounded p-2 flex flex-col items-center justify-center text-center cursor-pointer ${isHero ? 'col-span-2 row-span-2 min-h-[130px]' : 'min-h-[68px]'}"
+                  style="background-color: ${style.bg};"
+                  onmousemove="showTooltip(event, '<strong>${st.code} ${st.name}</strong><br/><span class=\\'text-slate-400\\'>產業：${st.sector}</span><br/>${tf}漲跌幅：<span class=\\'font-mono font-bold\\'>${sign}${pct.toFixed(2)}%</span><br/>11/20單日：<span class=\\'font-mono\\'>${st.perf['1D'].toFixed(2)}%</span>')"
+                  onmouseleave="hideTooltip()"
+                >
+                  <div class="font-extrabold ${isHero ? 'text-lg' : 'text-xs'} ${style.text}">${st.code} <span class="font-semibold">${st.name}</span></div>
+                  <div class="font-mono font-bold tabular-nums ${isHero ? 'text-base mt-1' : 'text-[11px]'} ${style.text}">${sign}${pct.toFixed(2)}%</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+        return;
+      }
+
+      // Grouped by Sector matching Taiwan screenshot layout (Left: 電子科技, Right: 金融, 生產製造, 加工業, 通訊/運輸)
+      const elecStocks = TW_STOCKS_DATA.filter(s => s.sector === '電子科技').sort((a, b) => b.weight - a.weight);
+      const finStocks = TW_STOCKS_DATA.filter(s => s.sector === '金融').sort((a, b) => b.weight - a.weight);
+      const otherStocks = TW_STOCKS_DATA.filter(s => !['電子科技', '金融'].includes(s.sector)).sort((a, b) => b.weight - a.weight);
+
+      const renderTile = (st, extraClass = '') => {
+        const pct = st.perf[tf];
+        const style = getTwStockColor(pct);
+        const sign = pct > 0 ? '+' : '';
+        const isTsmc = st.code === '2330';
+        return `
+          <div
+            class="treemap-tile rounded p-2 flex flex-col items-center justify-center text-center cursor-pointer border border-black/15 ${extraClass}"
+            style="background-color: ${style.bg};"
+            onmousemove="showTooltip(event, '<strong>${st.code} ${st.name}</strong><br/><span class=\\'text-slate-400\\'>板塊：${st.sector}</span><br/>${tf}表現：<span class=\\'font-mono font-bold\\'>${sign}${pct.toFixed(2)}%</span><br/>11/20單日：<span class=\\'font-mono\\'>${st.perf['1D'].toFixed(2)}%</span>')"
+            onmouseleave="hideTooltip()"
+          >
+            ${isTsmc ? `<div class="w-10 h-10 rounded-full bg-[#dc2626] text-white font-serif font-bold text-xs flex items-center justify-center mb-1 shadow">tsmc</div>` : ''}
+            <div class="font-extrabold tracking-tight ${isTsmc ? 'text-lg sm:text-xl' : 'text-xs'} ${style.text}">${st.code} <span class="font-semibold text-[11px]">${st.name}</span></div>
+            <div class="font-mono font-bold tabular-nums ${isTsmc ? 'text-base sm:text-lg' : 'text-[11px]'} ${style.text}">${sign}${pct.toFixed(2)}%</div>
+          </div>
+        `;
+      };
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 h-full">
+          <!-- Left Major Sector: 電子科技 -->
+          <div class="lg:col-span-8 bg-[#111827] rounded-lg p-2 border border-slate-800 flex flex-col">
+            <div class="text-[11px] font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+              <span>電子科技 &rsaquo;</span>
+              <span class="text-[10px] font-mono text-slate-500">權值核心</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1 flex-1">
+              ${elecStocks.map((st, idx) => {
+                if (idx === 0) return renderTile(st, 'col-span-4 row-span-2 min-h-[135px]');
+                if (idx === 1 || idx === 2) return renderTile(st, 'col-span-2 min-h-[66px]');
+                return renderTile(st, 'col-span-1 min-h-[56px]');
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Right Sectors: 金融 + 生產製造/加工業/通訊 -->
+          <div class="lg:col-span-4 flex flex-col gap-2">
+            <div class="bg-[#111827] rounded-lg p-2 border border-slate-800 flex-1 flex flex-col">
+              <div class="text-[11px] font-bold text-slate-300 mb-1.5">金融 &rsaquo;</div>
+              <div class="grid grid-cols-2 gap-1 flex-1">
+                ${finStocks.map((st, idx) => renderTile(st, idx === 0 ? 'col-span-2 min-h-[60px]' : 'min-h-[52px]')).join('')}
+              </div>
+            </div>
+            <div class="bg-[#111827] rounded-lg p-2 border border-slate-800 flex-1 flex flex-col">
+              <div class="text-[11px] font-bold text-slate-300 mb-1.5">生產製造 / 加工業 / 通訊 / 運輸 &rsaquo;</div>
+              <div class="grid grid-cols-2 gap-1 flex-1">
+                ${otherStocks.map(st => renderTile(st, 'min-h-[52px]')).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. RENDERING STABILIZATION CHECKLIST, CHARTS & TIMELINE
+    // -------------------------------------------------------------------------
+    function renderStabilizationChecklist() {
+      const signals = evaluateStabilizationSignals();
+      const passCnt = signals.filter(s => s.status === 'pass').length;
+      const partialCnt = signals.filter(s => s.status === 'partial').length;
+      const failCnt = signals.filter(s => s.status === 'fail').length;
+
+      // Update header & module badges
+      document.getElementById('hdrStabSummary').innerHTML = `
+        <span class="text-emerald-400 font-bold">${passCnt}達成</span> / <span class="text-amber-400 font-bold">${partialCnt}部分</span> / <span class="text-rose-400 font-bold">${failCnt}未達</span>
+      `;
+      document.getElementById('stabChecklistBadge').textContent = `止穩檢核結果：${passCnt} 項達成 ｜ ${partialCnt} 項部分 ｜ ${failCnt} 項未達`;
+
+      const statusBadge = {
+        pass: `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-mono text-xs font-bold">✓ 達成</span>`,
+        partial: `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono text-xs font-bold">△ 部分</span>`,
+        fail: `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono text-xs font-bold">× 未達</span>`
+      };
+
+      const tbody = document.getElementById('stabilizationTableBody');
+      tbody.innerHTML = signals.map(sig => `
+        <tr class="hover:bg-slate-800/40 transition-colors">
+          <td class="py-2.5 px-3 font-bold text-white whitespace-nowrap">${sig.name}</td>
+          <td class="py-2.5 px-3 text-slate-300">${sig.cond}</td>
+          <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge[sig.status]}</td>
+          <td class="py-2.5 px-3 font-mono text-xs text-slate-300 tabular-nums">${sig.reading}</td>
+        </tr>
+      `).join('');
+    }
+
+    function drawHistoricalCharts() {
+      drawMarginChart();
+      drawKospiChart();
+    }
+
+    function drawMarginChart() {
+      const canvas = document.getElementById('marginChartCanvas');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = rect.height;
+      const pad = { top: 24, right: 24, bottom: 32, left: 48 };
+      const plotW = W - pad.left - pad.right;
+      const plotH = H - pad.top - pad.bottom;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Historical data points from PDF Page 2
+      const pts = [
+        { label: '2025/3', val: 3279, note: '2025/3 3,279' },
+        { label: '4/9', val: 2240, note: '' },
+        { label: '4/30', val: 2096, note: '2025/4/30 2,096 (-36%)' },
+        { label: '7月', val: 2680, note: '' },
+        { label: '10月', val: 3050, note: '' },
+        { label: '2025年底', val: 3434, note: '2025年底 3,434' },
+        { label: '2026/3', val: 3890, note: '' },
+        { label: '5月', val: 4920, note: '' },
+        { label: '6/22', val: 6050, note: '6/22 首破 6,000' },
+        { label: '7/29', val: 5020, note: '' },
+        { label: '9月', val: 5820, note: '' },
+        { label: '10/12', val: 6533, note: '10/12 6,533' },
+        { label: '11/6', val: 5340, note: '' },
+        { label: '11/19', val: 4844, note: '' },
+        { label: '11/20', val: state.marginBalance, note: `11/20 ${Math.round(state.marginBalance).toLocaleString()} (-${state.marginCumDropPct.toFixed(0)}%)` }
+      ];
+
+      const minY = 1800, maxY = 6900;
+      const getX = idx => pad.left + (idx / (pts.length - 1)) * plotW;
+      const getY = val => pad.top + ((maxY - val) / (maxY - minY)) * plotH;
+
+      // Shaded > 5,500 Extreme Zone
+      const y5500 = getY(5500);
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
+      ctx.fillRect(pad.left, pad.top, plotW, y5500 - pad.top);
+
+      // Horizontal Grid Lines
+      ctx.font = '10px "JetBrains Mono", monospace';
+      [2000, 3000, 4000, 5000, 5500, 6000].forEach(yVal => {
+        const y = getY(yVal);
+        ctx.strokeStyle = yVal === 5500 ? 'rgba(239, 68, 68, 0.65)' : 'rgba(148, 163, 184, 0.14)';
+        ctx.setLineDash(yVal === 5500 ? [4, 4] : []);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+
+        ctx.fillStyle = yVal === 5500 ? '#f87171' : '#64748b';
+        ctx.textAlign = 'right';
+        ctx.fillText(yVal.toLocaleString(), pad.left - 6, y + 3);
+      });
+      ctx.setLineDash([]);
+
+      // Extreme Zone Label
+      ctx.fillStyle = '#fca5a5';
+      ctx.textAlign = 'left';
+      ctx.fillText('> 5,500 歷史極端區', pad.left + 8, y5500 - 6);
+
+      // Line Path
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const x = getX(idx), y = getY(p.val);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Points & Annotations
+      pts.forEach((p, idx) => {
+        const x = getX(idx), y = getY(p.val);
+        if (p.note || idx === pts.length - 1) {
+          ctx.fillStyle = (idx === 2 || idx === 11 || idx === pts.length - 1) ? '#ef4444' : '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (p.note) {
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = '600 10px "JetBrains Mono", "Noto Sans TC", sans-serif';
+            ctx.textAlign = idx > pts.length - 3 ? 'right' : 'left';
+            const offsetY = (idx === 2 || idx === pts.length - 1) ? 14 : -8;
+            const offsetX = idx > pts.length - 3 ? -4 : 4;
+            ctx.fillText(p.note, x + offsetX, y + offsetY);
+          }
+        }
+        // X-axis labels
+        if (idx % 2 === 0 || idx === pts.length - 1) {
+          ctx.fillStyle = '#64748b';
+          ctx.font = '10px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(p.label, x, H - 10);
+        }
+      });
+    }
+
+    function drawKospiChart() {
+      const canvas = document.getElementById('kospiChartCanvas');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = rect.height;
+      const pad = { top: 24, right: 64, bottom: 32, left: 46 };
+      const plotW = W - pad.left - pad.right;
+      const plotH = H - pad.top - pad.bottom;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const pts = [
+        { label: '9/22', val: 7015, note: '' },
+        { label: '9/25', val: 7075, note: '' },
+        { label: '10/2', val: 6930, note: '' },
+        { label: '10/12', val: 6380, note: '' },
+        { label: '10/15', val: 5545, note: '10/12-15 三天 -16%' },
+        { label: '10/22', val: 5534, note: '' },
+        { label: '10/29', val: 5938, note: '10/29 5,938' },
+        { label: '11/2', val: 5860, note: '' },
+        { label: '11/5', val: 5384, note: '' },
+        { label: '11/9', val: 5019, note: '11/9 5,019' },
+        { label: '11/12', val: 5343, note: '' },
+        { label: '11/17', val: 4968, note: '11/17 4,968' },
+        { label: '11/19', val: 5138, note: '' },
+        { label: '11/20', val: state.kospi, note: `11/20 ${Math.round(state.kospi).toLocaleString()}` }
+      ];
+
+      const minY = 4700, maxY = 7250;
+      const getX = idx => pad.left + (idx / (pts.length - 1)) * plotW;
+      const getY = val => pad.top + ((maxY - val) / (maxY - minY)) * plotH;
+
+      // Shaded resistance band 5,306 - 5,820
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.10)';
+      ctx.fillRect(pad.left, getY(5820), plotW, getY(5306) - getY(5820));
+
+      // Horizontal Key Levels from PDF Page 6
+      const levels = [
+        { val: 5820, label: '壓力 5,820', color: '#94a3b8' },
+        { val: 5534, label: '舊收低 5,534', color: '#94a3b8' },
+        { val: 5306, label: '舊盤低 5,306', color: '#94a3b8' },
+        { val: 5000, label: '防線 5,000', color: '#ef4444' }
+      ];
+
+      ctx.font = '10px "JetBrains Mono", "Noto Sans TC", sans-serif';
+      levels.forEach(lv => {
+        const y = getY(lv.val);
+        ctx.strokeStyle = lv.color;
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = lv.val === 5000 ? 1.5 : 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+
+        ctx.fillStyle = lv.val === 5000 ? '#f87171' : '#94a3b8';
+        ctx.textAlign = 'left';
+        ctx.fillText(lv.label, W - pad.right + 4, y + 3);
+      });
+      ctx.setLineDash([]);
+
+      // Y-axis ticks
+      [5000, 5500, 6000, 6500, 7000].forEach(yVal => {
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'right';
+        ctx.fillText(yVal.toLocaleString(), pad.left - 6, getY(yVal) + 3);
+      });
+
+      // Line Path
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const x = getX(idx), y = getY(p.val);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Dots & Labels
+      pts.forEach((p, idx) => {
+        const x = getX(idx), y = getY(p.val);
+        ctx.fillStyle = p.val < 5000 ? '#ef4444' : '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (p.note) {
+          ctx.fillStyle = p.val < 5000 ? '#fca5a5' : '#e2e8f0';
+          ctx.textAlign = idx === pts.length - 1 ? 'right' : 'center';
+          ctx.fillText(p.note, x, y + (idx === 6 || idx === 4 ? -8 : 13));
+        }
+
+        if (idx % 2 === 0 || idx === pts.length - 1) {
+          ctx.fillStyle = '#64748b';
+          ctx.textAlign = 'center';
+          ctx.fillText(p.label, x, H - 10);
+        }
+      });
+    }
+
+    function renderTimeline() {
+      const visible = timelineExpanded ? CATALYST_EVENTS : CATALYST_EVENTS.slice(-4);
+      const badgeStyles = {
+        rose: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+        amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        emerald: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+        sky: 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+      };
+
+      document.getElementById('timelineGrid').innerHTML = visible.map(ev => `
+        <div class="bg-[#0b0f19] border border-slate-800 rounded-lg p-3 flex flex-col justify-between gap-2">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="font-mono text-[11px] text-slate-400 font-semibold">${ev.date}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeStyles[ev.color]}">${ev.tag}</span>
+            </div>
+            <h4 class="text-xs sm:text-sm font-bold text-white mb-1">${ev.title}</h4>
+            <p class="text-xs text-slate-400 leading-relaxed">${ev.desc}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleTimelineExpand() {
+      timelineExpanded = !timelineExpanded;
+      document.getElementById('btnToggleTimeline').textContent = timelineExpanded
+        ? '收合歷史事件紀錄 ▲'
+        : '展開完整 12 筆事件紀錄 ▼';
+      renderTimeline();
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. SIMULATOR & REAL-TIME EDITOR CONTROLS
+    // -------------------------------------------------------------------------
+    function renderSimulatorControls() {
+      const controls = [
+        { key: 'marginBalance', label: '① 上市融資餘額 (億元)', min: 3200, max: 6600, step: 10, unit: '億' },
+        { key: 'maintenanceRatio', label: '① 全市場擔保維持率 (%)', min: 130, max: 185, step: 0.1, unit: '%' },
+        { key: 'marginDailyChg', label: '② 融資單日增減 (億元)', min: -600, max: 150, step: 5, unit: '億' },
+        { key: 'foreignFuturesShort', label: '③ 外資期貨淨空單 (口)', min: 20000, max: 115000, step: 500, unit: '口' },
+        { key: 'dailyVolume', label: '④ 每日成交值 (億元)', min: 5000, max: 18000, step: 100, unit: '億' },
+        { key: 'soxDrawdownPct', label: '⑥ 費半距高點回檔 (%)', min: -55, max: 0, step: 0.5, unit: '%' },
+        { key: 'sp500DrawdownPct', label: '⑦ S&P 500 距高點回檔 (%)', min: -25, max: 0, step: 0.2, unit: '%' },
+        { key: 'us10y', label: '⑧ 美債 10Y 殖利率 (%)', min: 3.8, max: 5.5, step: 0.02, unit: '%' },
+        { key: 'dxy', label: '⑨ 美元指數 DXY', min: 97, max: 106, step: 0.05, unit: '' },
+        { key: 'foreignSpotFlow', label: '⑪ 外資現貨買賣超 (億元)', min: -900, max: 400, step: 10, unit: '億' },
+        { key: 'usdTwd', label: '⑫ 新台幣匯率 USD/TWD', min: 31.8, max: 33.4, step: 0.005, unit: '' },
+        { key: 'vix', label: '⑬ VIX 恐慌指數', min: 12, max: 50, step: 0.2, unit: '' },
+        { key: 'fng', label: '⑬ CNN 恐懼貪婪指數 (0-100)', min: 5, max: 90, step: 1, unit: '' },
+        { key: 'kospi', label: '⑭ 南韓 KOSPI 指數', min: 4400, max: 6200, step: 10, unit: '' },
+        { key: 'taiex', label: '加權指數 TAIEX', min: 31000, max: 45000, step: 50, unit: '' },
+        { key: 'btc', label: '⑩ 比特幣 BTC (USD)', min: 40000, max: 95000, step: 250, unit: 'USD' }
+      ];
+
+      const grid = document.getElementById('simulatorControlsGrid');
+      grid.innerHTML = controls.map(c => `
+        <div class="bg-[#0b0f19] border border-slate-800 rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <label for="sim-${c.key}" class="text-xs font-bold text-slate-300 truncate">${c.label}</label>
+            <input
+              type="number"
+              id="simNum-${c.key}"
+              value="${state[c.key]}"
+              step="${c.step}"
+              onchange="updateStateField('${c.key}', parseFloat(this.value))"
+              class="w-24 bg-[#111827] border border-slate-700 rounded px-2 py-0.5 text-right font-mono text-xs text-sky-300 font-bold focus:outline-none focus:border-sky-500"
+            />
+          </div>
+          <input
+            type="range"
+            id="sim-${c.key}"
+            min="${c.min}"
+            max="${c.max}"
+            step="${c.step}"
+            value="${state[c.key]}"
+            oninput="updateStateField('${c.key}', parseFloat(this.value))"
+            class="w-full"
+          />
+        </div>
+      `).join('');
+    }
+
+    function updateStateField(key, val) {
+      if (isNaN(val)) return;
+      state[key] = val;
+
+      // Keep derived metrics consistent
+      if (key === 'marginBalance') {
+        state.marginCumDropPct = Math.max(0, ((6533 - val) / 6533) * 100);
+      }
+      if (key === 'taiex') {
+        state.taiexChgPct = ((val - 38426.89) / 38426.89) * 100;
+      }
+
+      // Sync input box & range slider
+      const numEl = document.getElementById(`simNum-${key}`);
+      const rngEl = document.getElementById(`sim-${key}`);
+      if (numEl) numEl.value = val;
+      if (rngEl) rngEl.value = val;
+
+      refreshAllViews();
+    }
+
+    function applyScenario(preset) {
+      if (preset === 'baseline') {
+        state = { ...BASELINE_STATE };
+        showToast('已還原 2026/11/21 週末版基準快照 (紅7 / 黃6 / 綠1)');
+      } else if (preset === 'monday_gap') {
+        state = {
+          ...BASELINE_STATE,
+          taiex: 34150.0,
+          taiexChgPct: -5.23,
+          marginBalance: 3832.0,
+          marginDailyChg: -520.0,
+          marginCumDropPct: 41.3,
+          maintenanceRatio: 144.8,
+          marginCallHouseholds: 9420,
+          forcedLiquidationHouseholds: 1180,
+          vix: 38.4,
+          kospi: 4790.0
+        };
+        showToast('已載入推演 A：週一開盤跳空補跌與追繳處分壓力情境');
+      } else if (preset === 'stabilizing') {
+        state = {
+          ...BASELINE_STATE,
+          taiex: 35680.0,
+          taiexChgPct: 1.85,
+          dailyVolume: 9650,
+          marginBalance: 3920.0,
+          marginDailyChg: -65.0,
+          marginCumDropPct: 40.0,
+          maintenanceRatio: 153.2,
+          foreignFuturesShort: 68500,
+          foreignSpotFlow: 135.0,
+          usdTwd: 32.81,
+          retailHeatState: 'green',
+          vix: 31.2,
+          fng: 18,
+          kospi: 5120.0
+        };
+        showToast('已載入推演 B：融資減幅收斂 + 外資空單回補 + 止穩開端訊號');
+      } else if (preset === 'washout_done') {
+        state = {
+          ...BASELINE_STATE,
+          taiex: 37200.0,
+          taiexChgPct: 2.95,
+          dailyVolume: 9850,
+          marginBalance: 3850.0,
+          marginDailyChg: -35.0,
+          marginCumDropPct: 41.1,
+          maintenanceRatio: 157.5,
+          foreignFuturesShort: 38000,
+          foreignSpotFlow: 260.0,
+          usdTwd: 32.45,
+          retailHeatState: 'green',
+          soxDrawdownPct: -9.2,
+          sp500DrawdownPct: -18.2,
+          us10y: 4.25,
+          dxy: 99.6,
+          crossAssetState: 'green',
+          goldChgPct: 1.4,
+          vix: 33.5,
+          fng: 14,
+          kospi: 5860.0
+        };
+        showToast('已載入推演 C：恐慌洗底完成、多項指標轉綠燈反攻情境');
+      }
+
+      renderSimulatorControls();
+      refreshAllViews();
+    }
+
+    // -------------------------------------------------------------------------
+    // 9. REAL-TIME LIVE MODE (COINGECKO + FRANKFURTER PUBLIC APIS + TICK STREAM)
+    // -------------------------------------------------------------------------
+    async function setDataMode(mode) {
+      dataMode = mode;
+      const btnSnap = document.getElementById('modeBtnSnapshot');
+      const btnLive = document.getElementById('modeBtnLive');
+      const liveDot = document.getElementById('liveDot');
+      const apiBadge = document.getElementById('liveApiBadge');
+
+      if (mode === 'snapshot') {
+        if (liveIntervalId) clearInterval(liveIntervalId);
+        liveIntervalId = null;
+        btnSnap.className = 'px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all bg-sky-600 text-white shadow';
+        btnLive.className = 'px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-300 hover:text-white flex items-center gap-1.5';
+        liveDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        apiBadge.textContent = '資料源：2026/11/21 報告驗證數據';
+        state = { ...BASELINE_STATE };
+        renderSimulatorControls();
+        refreshAllViews();
+        showToast('已切換回 2026/11/21 報告基準快照');
+      } else {
+        btnLive.className = 'px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all bg-emerald-600 text-white shadow flex items-center gap-1.5';
+        btnSnap.className = 'px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-300 hover:text-white';
+        liveDot.className = 'w-2 h-2 rounded-full bg-white animate-live-dot';
+        apiBadge.textContent = '資料源：LIVE 即時串流 + 公開 API 同步中';
+        showToast('已啟動 LIVE 即時自動更新模式 (每 3 秒更新報價與熱力圖)');
+
+        await fetchLivePublicApis();
+        if (liveIntervalId) clearInterval(liveIntervalId);
+        liveIntervalId = setInterval(() => {
+          simulateMarketMicroTicks();
+        }, 3000);
+      }
+    }
+
+    async function fetchLivePublicApis() {
+      const icon = document.getElementById('syncIcon');
+      if (icon) icon.classList.add('animate-spin');
+
+      try {
+        // 1. Live Crypto via CoinGecko Public API
+        const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
+        if (cgRes.ok) {
+          const cg = await cgRes.json();
+          if (cg.bitcoin && cg.bitcoin.usd) {
+            state.btc = Math.round(cg.bitcoin.usd);
+            const btcTile = FUTURES_DATA.find(f => f.id === 'BITCOIN');
+            if (btcTile) btcTile.price = state.btc.toLocaleString();
+          }
+          if (cg.ethereum && cg.ethereum.usd) {
+            const ethTile = FUTURES_DATA.find(f => f.id === 'ETHEREUM');
+            if (ethTile) ethTile.price = Math.round(cg.ethereum.usd).toLocaleString();
+          }
+        }
+
+        // 2. Live FX via Frankfurter Public API
+        const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=JPY,EUR,AUD,CAD,CHF,GBP,NZD');
+        if (fxRes.ok) {
+          const fx = await fxRes.json();
+          if (fx && fx.rates) {
+            const eur = FUTURES_DATA.find(f => f.id === 'EURO');
+            if (eur && fx.rates.EUR) eur.price = (1 / fx.rates.EUR).toFixed(4);
+            const jpy = FUTURES_DATA.find(f => f.id === 'JP-YEN');
+            if (jpy && fx.rates.JPY) jpy.price = (1 / fx.rates.JPY).toFixed(5);
+          }
+        }
+      } catch (err) {
+        // Graceful fallback if offline or sandboxed
+      } finally {
+        const now = new Date();
+        document.getElementById('lastSyncTimestamp').textContent = `即時同步：${now.toLocaleTimeString('zh-TW', { hour12: false })}`;
+        if (icon) setTimeout(() => icon.classList.remove('animate-spin'), 400);
+        refreshAllViews();
+      }
+    }
+
+    function simulateMarketMicroTicks() {
+      const jitter = (val, pctRange) => val * (1 + (Math.random() - 0.5) * pctRange);
+      state.twNightFutures = Math.round(jitter(state.twNightFutures, 0.0025));
+      state.twNightChg = state.twNightFutures - 35800;
+      state.twNightChgPct = (state.twNightChg / 35800) * 100;
+
+      state.btc = Math.round(jitter(state.btc, 0.004));
+      state.gold = Math.round(jitter(state.gold, 0.002));
+      state.vix = parseFloat(jitter(state.vix, 0.006).toFixed(2));
+      state.usdTwd = parseFloat(jitter(state.usdTwd, 0.0006).toFixed(3));
+
+      // Subtle tick on SP500 heatmap
+      SP500_DATA.forEach(st => {
+        st.chg1w = parseFloat((st.chg1w + (Math.random() - 0.5) * 0.14).toFixed(2));
+      });
+
+      const now = new Date();
+      document.getElementById('lastSyncTimestamp').textContent = `即時串流：${now.toLocaleTimeString('zh-TW', { hour12: false })}`;
+      refreshAllViews();
+    }
+
+    function triggerImmediateSync() {
+      fetchLivePublicApis();
+      showToast('已觸發即時報價同步');
+    }
+
+    // -------------------------------------------------------------------------
+    // 10. NAVIGATION, FILTERS, HEATMAP LAYOUTS & STORAGE
+    // -------------------------------------------------------------------------
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        const isTarget = btn.dataset.tab === tab;
+        btn.className = isTarget
+          ? 'nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40'
+          : 'nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-800/60';
+      });
+
+      const sections = {
+        brief: document.getElementById('executiveBriefSection'),
+        indicators: document.getElementById('section-indicators'),
+        heatmaps: document.getElementById('section-heatmaps'),
+        stabilization: document.getElementById('section-stabilization'),
+        simulator: document.getElementById('section-simulator')
+      };
+
+      if (tab === 'all') {
+        Object.values(sections).forEach(el => el.classList.remove('hidden'));
+      } else {
+        Object.entries(sections).forEach(([k, el]) => {
+          if (k === tab) el.classList.remove('hidden');
+          else el.classList.add('hidden');
+        });
+      }
+
+      if (tab === 'all' || tab === 'stabilization') {
+        setTimeout(drawHistoricalCharts, 50);
+      }
+    }
+
+    function setLightFilter(light) {
+      lightFilter = light;
+      ['all', 'red', 'amber', 'green'].forEach(k => {
+        const btn = document.getElementById(`filterLight-${k}`);
+        if (k === light) {
+          btn.classList.add('bg-slate-700', 'text-white');
+        } else {
+          btn.classList.remove('bg-slate-700', 'text-white');
+        }
+      });
+      renderIndicatorsAndSummary();
+    }
+
+    function setCategoryFilter(cat) {
+      categoryFilter = cat;
+      renderIndicatorsAndSummary();
+    }
+
+    function setHeatmapLayout(layout) {
+      heatmapLayout = layout;
+      ['grid', 'sp500', 'futures', 'tw'].forEach(k => {
+        const btn = document.getElementById(`hmLayout-${k}`);
+        btn.className = k === layout
+          ? 'px-2.5 py-1 rounded font-bold bg-sky-600 text-white'
+          : 'px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white';
+      });
+
+      const cardSp = document.getElementById('hmCard-sp500');
+      const cardFut = document.getElementById('hmCard-futures');
+      const cardTw = document.getElementById('hmCard-tw');
+      const splitGrid = document.getElementById('hmBottomSplitGrid');
+
+      if (layout === 'grid') {
+        cardSp.classList.remove('hidden');
+        splitGrid.classList.remove('hidden');
+        cardFut.classList.remove('hidden', 'xl:col-span-12');
+        cardFut.classList.add('xl:col-span-5');
+        cardTw.classList.remove('hidden', 'xl:col-span-12');
+        cardTw.classList.add('xl:col-span-7');
+      } else if (layout === 'sp500') {
+        cardSp.classList.remove('hidden');
+        splitGrid.classList.add('hidden');
+      } else if (layout === 'futures') {
+        cardSp.classList.add('hidden');
+        splitGrid.classList.remove('hidden');
+        cardFut.classList.remove('hidden', 'xl:col-span-5');
+        cardFut.classList.add('xl:col-span-12');
+        cardTw.classList.add('hidden');
+      } else if (layout === 'tw') {
+        cardSp.classList.add('hidden');
+        splitGrid.classList.remove('hidden');
+        cardFut.classList.add('hidden');
+        cardTw.classList.remove('hidden', 'xl:col-span-7');
+        cardTw.classList.add('xl:col-span-12');
+      }
+    }
+
+    function setHeatmapEngine(engine) {
+      heatmapEngine = engine;
+      const customWrap = document.getElementById('customHeatmapsWrapper');
+      const tvWrap = document.getElementById('tvWidgetsWrapper');
+      const btnCustom = document.getElementById('hmEngine-custom');
+      const btnTv = document.getElementById('hmEngine-tv');
+
+      if (engine === 'custom') {
+        customWrap.classList.remove('hidden');
+        tvWrap.classList.add('hidden');
+        btnCustom.className = 'px-2.5 py-1 rounded font-bold bg-emerald-600 text-white';
+        btnTv.className = 'px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white';
+      } else {
+        customWrap.classList.add('hidden');
+        tvWrap.classList.remove('hidden');
+        btnTv.className = 'px-2.5 py-1 rounded font-bold bg-emerald-600 text-white';
+        btnCustom.className = 'px-2.5 py-1 rounded font-semibold text-slate-300 hover:text-white';
+        mountTradingViewWidgets();
+      }
+    }
+
+    let tvMounted = false;
+    function mountTradingViewWidgets() {
+      if (tvMounted) return;
+      tvMounted = true;
+      try {
+        const spContainer = document.getElementById('tvWidgetSP500');
+        const spScript = document.createElement('script');
+        spScript.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js';
+        spScript.async = true;
+        spScript.innerHTML = JSON.stringify({
+          exchanges: [],
+          dataSource: 'SPX500',
+          grouping: 'sector',
+          blockSize: 'market_cap_basic',
+          blockColor: 'change',
+          locale: 'zh_TW',
+          symbolUrl: '',
+          colorTheme: 'dark',
+          hasTopBar: true,
+          isDataSetEnabled: true,
+          isZoomEnabled: true,
+          hasSymbolTooltip: true,
+          width: '100%',
+          height: '100%'
+        });
+        spContainer.appendChild(spScript);
+
+        const crContainer = document.getElementById('tvWidgetCrypto');
+        const crScript = document.createElement('script');
+        crScript.src = 'https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js';
+        crScript.async = true;
+        crScript.innerHTML = JSON.stringify({
+          dataSource: 'Crypto',
+          blockSize: 'market_cap_calc',
+          blockColor: 'change',
+          locale: 'zh_TW',
+          symbolUrl: '',
+          colorTheme: 'dark',
+          hasTopBar: true,
+          isDataSetEnabled: true,
+          isZoomEnabled: true,
+          hasSymbolTooltip: true,
+          width: '100%',
+          height: '100%'
+        });
+        crContainer.appendChild(crScript);
+      } catch (e) {
+        showToast('TradingView 外部組件載入受限，建議使用互動戰情熱力圖');
+      }
+    }
+
+    function setTwGroupMode(mode) {
+      twGroupMode = mode;
+      document.getElementById('twGrp-sector').className = mode === 'sector'
+        ? 'px-2 py-1 rounded font-bold bg-slate-700 text-white'
+        : 'px-2 py-1 rounded font-medium text-slate-400 hover:text-white';
+      document.getElementById('twGrp-flat').className = mode === 'flat'
+        ? 'px-2 py-1 rounded font-bold bg-slate-700 text-white'
+        : 'px-2 py-1 rounded font-medium text-slate-400 hover:text-white';
+      renderTwSectorHeatmap();
+    }
+
+    function setTwTimeframe(tf) {
+      twTimeframe = tf;
+      document.querySelectorAll('.tw-tf-btn').forEach(btn => {
+        const isCurrent = btn.id === `twTf-${tf}`;
+        btn.className = isCurrent
+          ? 'tw-tf-btn px-2 py-1 rounded bg-sky-600 text-white font-bold'
+          : 'tw-tf-btn px-2 py-1 rounded text-slate-400 hover:text-white';
+      });
+      renderTwSectorHeatmap();
+    }
+
+    function saveToLocalStorage() {
+      try {
+        localStorage.setItem('market_overheat_state_2026', JSON.stringify(state));
+        showToast('已成功儲存目前數據至本機瀏覽器！');
+      } catch (e) {
+        showToast('儲存失敗：瀏覽器限制本地儲存');
+      }
+    }
+
+    function loadFromLocalStorage() {
+      try {
+        const raw = localStorage.getItem('market_overheat_state_2026');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state = { ...BASELINE_STATE, ...parsed };
+        }
+      } catch (e) {
+        state = { ...BASELINE_STATE };
+      }
+    }
+
+    function exportSnapshotJSON() {
+      const payload = JSON.stringify({
+        exportedAt: new Date().toISOString(),
+        indicators: state,
+        stabilizationChecklist: evaluateStabilizationSignals()
+      }, null, 2);
+
+      // Copy to clipboard using textarea + execCommand('copy') for reliable iFrame support
+      const ta = document.createElement('textarea');
+      ta.value = payload;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('已將完整戰情快照 JSON 複製到剪貼簿！');
+      } catch (e) {
+        showToast('複製失敗，請手動選取匯出');
+      }
+      document.body.removeChild(ta);
+    }
+
+    // -------------------------------------------------------------------------
+    // 11. TOOLTIP & TOAST HELPERS (NO ALERT/CONFIRM)
+    // -------------------------------------------------------------------------
+    function showTooltip(event, htmlContent) {
+      const tip = document.getElementById('globalTooltip');
+      tip.innerHTML = htmlContent;
+      tip.classList.remove('hidden');
+      const x = Math.min(window.innerWidth - 240, event.clientX + 14);
+      const y = Math.min(window.innerHeight - 110, event.clientY + 14);
+      tip.style.left = `${Math.max(10, x)}px`;
+      tip.style.top = `${Math.max(10, y)}px`;
+    }
+
+    function hideTooltip() {
+      document.getElementById('globalTooltip').classList.add('hidden');
+    }
+
+    function showToast(message) {
+      const container = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      el.className = 'pointer-events-auto bg-slate-900/95 border border-sky-500/50 text-slate-100 text-xs font-semibold px-4 py-2.5 rounded-lg shadow-2xl flex items-center gap-2 transition-all duration-300';
+      el.innerHTML = `<span class="w-2 h-2 rounded-full bg-sky-400"></span><span>${message}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        setTimeout(() => el.remove(), 300);
+      }, 3200);
+    }
+
+    // -------------------------------------------------------------------------
+    // 12. MASTER REFRESH & INITIALIZATION
+    // -------------------------------------------------------------------------
+    function refreshAllViews() {
+      renderTopTicker();
+      renderIndicatorsAndSummary();
+      renderSP500Heatmap();
+      renderFuturesHeatmap();
+      renderTwSectorHeatmap();
+      renderStabilizationChecklist();
+      drawHistoricalCharts();
+    }
+
+    window.addEventListener('resize', () => {
+      drawHistoricalCharts();
+    });
+
+    window.onload = function () {
+      loadFromLocalStorage();
+      renderSimulatorControls();
+      renderTimeline();
+      refreshAllViews();
+    };
+  </script>
+</body>
+</html>
